@@ -7,14 +7,14 @@ use crate::app::Backend::Latex;
 use crate::app::Output::Pdf;
 
 #[derive(Default)]
-enum Backend{
+pub enum Backend{
     #[default]
     Latex,
     Typst
 }
 
 #[derive(Default)]
-enum Output{
+pub enum Output{
     #[default]
     Pdf,
     Svg
