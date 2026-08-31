@@ -1,0 +1,36 @@
+<!doctype html>
+<html lang="zh-CN">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>Equation Exporter</title>
+  </head>
+  <body>
+    <main class="app-shell">
+      <header class="toolbar">
+        <div>
+          <h1>Equation Exporter</h1>
+          <p>LaTeX 公式编辑与导出</p>
+        </div>
+        <div class="export-actions" aria-label="导出格式">
+          <button type="button" data-output="pdf">导出 PDF</button>
+          <button type="button" data-output="svg">导出 SVG</button>
+        </div>
+      </header>
+
+      <section class="workspace">
+        <label class="pane editor-pane" for="source">
+          <span class="pane-title">公式输入</span>
+          <textarea id="source" spellcheck="false" placeholder="例如：\frac{a}{b}"></textarea>
+        </label>
+        <section class="pane preview-pane" aria-labelledby="preview-title">
+          <h2 id="preview-title" class="pane-title">预览</h2>
+          <div id="preview" aria-live="polite"></div>
+        </section>
+      </section>
+
+      <footer id="status" class="status" aria-live="polite">输入 LaTeX 公式后将在此处预览</footer>
+    </main>
+    <script type="module" src="/src/main.ts"></script>
+  </body>
+</html>

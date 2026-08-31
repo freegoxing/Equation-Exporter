@@ -1,0 +1,11 @@
+{
+  "name": "equation-exporter",
+  "private": true,
+  "version": "0.1.0",
+  "packageManager": "pnpm@11.24.0",
+  "scripts": {
+    "dev": "frontend/node_modules/.bin/tauri dev",
+    "build": "frontend/node_modules/.bin/tauri build",
+    "test": "pnpm --dir frontend test -- --run && cargo test --workspace"
+  }
+}

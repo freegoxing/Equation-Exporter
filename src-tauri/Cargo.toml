@@ -1,0 +1,11 @@
+[package]
+name = "equation-exporter-tauri"
+version = "0.1.0"
+edition = "2024"
+
+[build-dependencies]
+tauri-build = { version = "2.6", features = [] }
+
+[dependencies]
+equation-exporter = { path = ".." }
+tauri = { version = "2.11", features = [] }

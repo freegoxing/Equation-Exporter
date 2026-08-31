@@ -15,9 +15,7 @@ mod tests {
 \usepackage{amssymb}
 
 \begin{document}
-\[
-G_{\mathrm{rep}}^{\mathrm{train}}
-\]
+$\displaystyle G_{\mathrm{rep}}^{\mathrm{train}}$
 \end{document}
 ";
 
@@ -51,11 +49,13 @@ printf '<svg />' > equation.svg
         .unwrap();
 
         assert_eq!(output_dir.parent(), Some(Path::new("/tmp")));
-        assert!(output_dir
-            .file_name()
-            .unwrap()
-            .to_string_lossy()
-            .starts_with("eqexport-"));
+        assert!(
+            output_dir
+                .file_name()
+                .unwrap()
+                .to_string_lossy()
+                .starts_with("eqexport-")
+        );
         assert!(output_dir.join("equation.tex").is_file());
         assert!(output_dir.join("equation.aux").is_file());
         assert!(output_dir.join("equation.log").is_file());
@@ -101,9 +101,7 @@ const TEMPLATE: &str = r"\documentclass[border=1pt]{standalone}
 \usepackage{amssymb}
 
 \begin{document}
-\[
-{{EQUATION}}
-\]
+$\displaystyle {{EQUATION}}$
 \end{document}
 ";
 
