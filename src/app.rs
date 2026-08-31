@@ -1,4 +1,5 @@
 mod fonts;
+mod latex;
 
 use eframe::egui;
 
