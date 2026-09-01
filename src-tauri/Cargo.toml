@@ -7,5 +7,9 @@ edition = "2024"
 tauri-build = { version = "2.6", features = [] }
 
 [dependencies]
+clipboard-rs = "0.3.5"
 equation-exporter = { path = ".." }
+gtk = "0.18.2"
 tauri = { version = "2.11", features = [] }
+tauri-plugin-dialog = "2"
+url = "2.5.8"

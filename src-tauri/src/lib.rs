@@ -1,4 +1,6 @@
-use equation_exporter::commands::{OutputFormat, export_equation as export};
+mod export;
+#[cfg(target_os = "linux")]
+mod linux_clipboard;
 #[cfg(debug_assertions)]
 use std::{
     io,
@@ -8,18 +10,14 @@ use std::{
     time::{Duration, Instant},
 };
 
-#[tauri::command]
-fn export_equation(source: String, output: OutputFormat) -> Result<String, String> {
-    export(source, output)
-}
-
 pub fn run() {
     #[cfg(debug_assertions)]
     let _dev_server = start_dev_server_if_needed()
         .expect("failed to start the Equation Exporter frontend development server");
 
     tauri::Builder::default()
-        .invoke_handler(tauri::generate_handler![export_equation])
+        .plugin(tauri_plugin_dialog::init())
+        .invoke_handler(tauri::generate_handler![export::save_equation, export::copy_equation])
         .run(tauri::generate_context!())
         .expect("error while running Equation Exporter");
 }

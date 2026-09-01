@@ -3,3 +3,6 @@ packages:
 
 allowBuilds:
   esbuild: true
+
+minimumReleaseAgeExclude:
+  - '@tauri-apps/plugin-dialog@2.7.3'
