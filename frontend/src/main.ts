@@ -4,31 +4,50 @@ import "./style.css";
 import { invoke } from "@tauri-apps/api/core";
 import { save } from "@tauri-apps/plugin-dialog";
 
-import { cancelledExportStatus, copyFailureStatus, type OutputFormat, saveDialogOptions } from "./export";
+import {
+  cancelledExportStatus,
+  copyFailureStatus,
+  exportArguments,
+  type Backend,
+  type OutputFormat,
+  saveDialogOptions,
+} from "./export";
 import { renderPreview } from "./preview";
+import { renderTypstPreview } from "./typst-preview";
 
 const sourceElement = document.querySelector<HTMLTextAreaElement>("#source");
+const backendElement = document.querySelector<HTMLSelectElement>("#backend");
 const previewElement = document.querySelector<HTMLElement>("#preview");
 const statusElement = document.querySelector<HTMLElement>("#status");
 const exportButtons = Array.from(document.querySelectorAll<HTMLButtonElement>("[data-action][data-output]"));
 
-if (!sourceElement || !previewElement || !statusElement) {
+if (!sourceElement || !backendElement || !previewElement || !statusElement) {
   throw new Error("Equation Exporter 页面缺少必要元素");
 }
 
 const source = sourceElement;
+const backend = backendElement;
 const preview = previewElement;
 const status = statusElement;
+let previewRequest = 0;
 
 function updatePreview(): void {
-  const result = renderPreview(source.value);
-  preview.classList.toggle("preview-error", Boolean(result.error));
+  const request = ++previewRequest;
+  const render = backend.value === "typst" ? renderTypstPreview(source.value) : Promise.resolve(renderPreview(source.value));
 
-  if (result.html) {
-    preview.innerHTML = result.html;
-  } else {
-    preview.textContent = result.error ?? result.message ?? "";
-  }
+  void render.then((result) => {
+    if (request !== previewRequest) {
+      return;
+    }
+
+    preview.classList.toggle("preview-error", Boolean(result.error));
+
+    if (result.html) {
+      preview.innerHTML = result.html;
+    } else {
+      preview.textContent = result.error ?? result.message ?? "";
+    }
+  });
 }
 
 function setStatus(message: string): void {
@@ -52,7 +71,10 @@ async function saveEquation(output: OutputFormat): Promise<void> {
   setStatus("正在导出…");
 
   try {
-    await invoke("save_equation", { source: source.value, output, destination });
+    await invoke("save_equation", {
+      ...exportArguments(backend.value as Backend, source.value, output),
+      destination,
+    });
     setStatus(`已保存：${destination}`);
   } catch (error) {
     setStatus(`导出失败：${error instanceof Error ? error.message : String(error)}`);
@@ -66,7 +88,7 @@ async function copyEquation(output: OutputFormat): Promise<void> {
   setStatus("正在复制…");
 
   try {
-    await invoke("copy_equation", { source: source.value, output });
+    await invoke("copy_equation", exportArguments(backend.value as Backend, source.value, output));
     setStatus("已复制");
   } catch {
     setStatus(copyFailureStatus());
@@ -76,6 +98,7 @@ async function copyEquation(output: OutputFormat): Promise<void> {
 }
 
 source.addEventListener("input", updatePreview);
+backend.addEventListener("change", updatePreview);
 exportButtons.forEach((button) => {
   button.addEventListener("click", () => {
     const output = button.dataset.output;

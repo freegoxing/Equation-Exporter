@@ -10,8 +10,15 @@
       <header class="toolbar">
         <div>
           <h1>Equation Exporter</h1>
-          <p>LaTeX 公式编辑与导出</p>
+          <p>公式编辑、预览与导出</p>
         </div>
+        <label class="backend-picker" for="backend">
+          后端
+          <select id="backend">
+            <option value="latex">LaTeX</option>
+            <option value="typst">Typst</option>
+          </select>
+        </label>
         <div class="export-actions" aria-label="导出操作">
           <button type="button" data-action="save" data-output="pdf">另存为 PDF</button>
           <button type="button" data-action="save" data-output="svg">另存为 SVG</button>
@@ -31,7 +38,7 @@
         </section>
       </section>
 
-      <footer id="status" class="status" aria-live="polite">输入 LaTeX 公式后将在此处预览</footer>
+      <footer id="status" class="status" aria-live="polite">输入公式后将在此处预览</footer>
     </main>
     <script type="module" src="/src/main.ts"></script>
   </body>

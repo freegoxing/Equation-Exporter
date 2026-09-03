@@ -2,11 +2,13 @@ import katex from "katex";
 
 export const EMPTY_PREVIEW_MESSAGE = "输入 LaTeX 公式后将在此处预览";
 
+export type PreviewResult = { html?: string; message?: string; error?: string };
+
 export function previewMessage(source: string): string {
   return source.trim() === "" ? EMPTY_PREVIEW_MESSAGE : "";
 }
 
-export function renderPreview(source: string): { html?: string; message?: string; error?: string } {
+export function renderPreview(source: string): PreviewResult {
   const message = previewMessage(source);
   if (message) {
     return { message };

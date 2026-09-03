@@ -1,7 +1,10 @@
 #[cfg(not(target_os = "linux"))]
 use clipboard_rs::{Clipboard, ClipboardContext};
-use equation_exporter::commands::{export_equation, OutputFormat};
-use std::{fs, path::{Path, PathBuf}};
+use equation_exporter::commands::{Backend, OutputFormat, export_equation};
+use std::{
+    fs,
+    path::{Path, PathBuf},
+};
 
 pub fn copy_file(source: &Path, destination: &Path) -> Result<(), String> {
     if let Some(parent) = destination.parent() {
@@ -15,10 +18,11 @@ pub fn copy_file(source: &Path, destination: &Path) -> Result<(), String> {
 #[tauri::command]
 pub fn save_equation(
     source: String,
+    backend: Backend,
     output: OutputFormat,
     destination: PathBuf,
 ) -> Result<(), String> {
-    let artifact = render_artifact(source, output)?;
+    let artifact = render_artifact(source, backend, output)?;
     copy_file(&artifact, &destination)
 }
 
@@ -26,11 +30,13 @@ pub fn save_equation(
 pub async fn copy_equation(
     window: tauri::WebviewWindow,
     source: String,
+    backend: Backend,
     output: OutputFormat,
 ) -> Result<(), String> {
-    let artifact = tauri::async_runtime::spawn_blocking(move || render_artifact(source, output))
-        .await
-        .map_err(|error| error.to_string())??;
+    let artifact =
+        tauri::async_runtime::spawn_blocking(move || render_artifact(source, backend, output))
+            .await
+            .map_err(|error| error.to_string())??;
 
     write_clipboard(&window, &artifact, output).map_err(copy_error)
 }
@@ -57,13 +63,20 @@ fn write_clipboard(
             .set_files(vec![artifact.display().to_string()])
             .map_err(|error| error.to_string()),
         OutputFormat::Svg => clipboard
-            .set_buffer(svg_clipboard_format(), fs::read(artifact).map_err(copy_error)?)
+            .set_buffer(
+                svg_clipboard_format(),
+                fs::read(artifact).map_err(copy_error)?,
+            )
             .map_err(|error| error.to_string()),
     }
 }
 
-fn render_artifact(source: String, output: OutputFormat) -> Result<PathBuf, String> {
-    export_equation(source, output).map(PathBuf::from)
+fn render_artifact(
+    source: String,
+    backend: Backend,
+    output: OutputFormat,
+) -> Result<PathBuf, String> {
+    export_equation(backend, source, output).map(PathBuf::from)
 }
 
 #[cfg(target_os = "macos")]
@@ -85,7 +98,11 @@ mod tests {
     use super::copy_file;
     #[cfg(not(target_os = "linux"))]
     use super::svg_clipboard_format;
-    use std::{env, fs, path::PathBuf, time::{SystemTime, UNIX_EPOCH}};
+    use std::{
+        env, fs,
+        path::PathBuf,
+        time::{SystemTime, UNIX_EPOCH},
+    };
 
     #[test]
     fn copies_a_rendered_artifact_to_the_selected_destination() {
@@ -110,7 +127,10 @@ mod tests {
     }
 
     fn unique_test_directory() -> PathBuf {
-        let nonce = SystemTime::now().duration_since(UNIX_EPOCH).unwrap().as_nanos();
+        let nonce = SystemTime::now()
+            .duration_since(UNIX_EPOCH)
+            .unwrap()
+            .as_nanos();
         let directory = env::temp_dir().join(format!("eqexport-save-test-{nonce}"));
         fs::create_dir(&directory).unwrap();
         directory

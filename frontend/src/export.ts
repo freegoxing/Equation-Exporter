@@ -1,4 +1,9 @@
 export type OutputFormat = "pdf" | "svg";
+export type Backend = "latex" | "typst";
+
+export function exportArguments(backend: Backend, source: string, output: OutputFormat) {
+  return { backend, source, output };
+}
 
 export function saveDialogOptions(output: OutputFormat): {
   defaultPath: string;
