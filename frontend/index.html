@@ -33,7 +33,14 @@
           <textarea id="source" spellcheck="false" placeholder="例如：\frac{a}{b}"></textarea>
         </label>
         <section class="pane preview-pane" aria-labelledby="preview-title">
-          <h2 id="preview-title" class="pane-title">预览</h2>
+          <div class="preview-heading">
+            <h2 id="preview-title" class="pane-title">预览</h2>
+            <div class="preview-zoom" aria-label="预览缩放">
+              <button id="preview-zoom-out" type="button" aria-label="缩小预览">−</button>
+              <output id="preview-zoom-value" for="preview-zoom-out preview-zoom-in">100%</output>
+              <button id="preview-zoom-in" type="button" aria-label="放大预览">+</button>
+            </div>
+          </div>
           <div id="preview" aria-live="polite"></div>
         </section>
       </section>

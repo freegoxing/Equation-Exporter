@@ -41,6 +41,10 @@ select { border: 1px solid #cbd5e1; border-radius: .375rem; padding: .45rem .6re
 .workspace { display: grid; flex: 1; grid-template-columns: minmax(280px, 42%) 1fr; gap: 1px; background: #e5e7eb; }
 .pane { display: flex; min-height: 0; flex-direction: column; gap: .75rem; padding: 1rem 1.5rem; background: #fff; }
 .editor-pane { cursor: text; }
+.preview-heading { display: flex; align-items: center; justify-content: space-between; gap: .75rem; }
+.preview-zoom { display: flex; align-items: center; gap: .35rem; }
+.preview-zoom button { min-width: 2rem; padding: .2rem .45rem; font-size: 1rem; line-height: 1; }
+.preview-zoom output { min-width: 3.25rem; text-align: center; color: #475569; font-size: .875rem; }
 
 textarea {
   min-height: 16rem;
@@ -55,7 +59,8 @@ textarea {
 }
 textarea:focus { border-color: #2563eb; box-shadow: 0 0 0 2px #bfdbfe; }
 
-#preview { display: grid; min-height: 16rem; flex: 1; place-items: center; overflow: auto; color: #334155; }
+#preview { --preview-scale: 1; display: grid; min-height: 16rem; flex: 1; place-items: center; overflow: auto; color: #334155; }
+#preview > * { zoom: var(--preview-scale, 1); }
 #preview.preview-error { align-content: start; justify-items: start; color: #b91c1c; white-space: pre-wrap; }
 .status { min-height: 2.75rem; padding: .75rem 1.5rem; border-top: 1px solid #e5e7eb; color: #475569; background: #fff; font-size: .875rem; }
 

@@ -13,23 +13,53 @@ import {
   saveDialogOptions,
 } from "./export";
 import { renderPreview } from "./preview";
+import {
+  clampPreviewZoom,
+  formatPreviewZoom,
+  PREVIEW_ZOOM_MAX,
+  PREVIEW_ZOOM_MIN,
+  PREVIEW_ZOOM_STEP,
+  previewScale,
+} from "./preview-zoom";
 import { renderTypstPreview } from "./typst-preview";
 
 const sourceElement = document.querySelector<HTMLTextAreaElement>("#source");
 const backendElement = document.querySelector<HTMLSelectElement>("#backend");
 const previewElement = document.querySelector<HTMLElement>("#preview");
+const previewZoomOutElement = document.querySelector<HTMLButtonElement>("#preview-zoom-out");
+const previewZoomValueElement = document.querySelector<HTMLOutputElement>("#preview-zoom-value");
+const previewZoomInElement = document.querySelector<HTMLButtonElement>("#preview-zoom-in");
 const statusElement = document.querySelector<HTMLElement>("#status");
 const exportButtons = Array.from(document.querySelectorAll<HTMLButtonElement>("[data-action][data-output]"));
 
-if (!sourceElement || !backendElement || !previewElement || !statusElement) {
+if (
+  !sourceElement ||
+  !backendElement ||
+  !previewElement ||
+  !previewZoomOutElement ||
+  !previewZoomValueElement ||
+  !previewZoomInElement ||
+  !statusElement
+) {
   throw new Error("Equation Exporter 页面缺少必要元素");
 }
 
 const source = sourceElement;
 const backend = backendElement;
 const preview = previewElement;
+const previewZoomOut = previewZoomOutElement;
+const previewZoomValue = previewZoomValueElement;
+const previewZoomIn = previewZoomInElement;
 const status = statusElement;
 let previewRequest = 0;
+let previewZoom = 100;
+
+function applyPreviewScale(): void {
+  preview.style.setProperty("--preview-scale", previewScale(backend.value as Backend, previewZoom));
+  previewZoomValue.value = formatPreviewZoom(previewZoom);
+  previewZoomOut.disabled = previewZoom <= PREVIEW_ZOOM_MIN;
+  previewZoomIn.disabled = previewZoom >= PREVIEW_ZOOM_MAX;
+}
 
 function updatePreview(): void {
   const request = ++previewRequest;
@@ -47,6 +77,8 @@ function updatePreview(): void {
     } else {
       preview.textContent = result.error ?? result.message ?? "";
     }
+
+    applyPreviewScale();
   });
 }
 
@@ -98,7 +130,18 @@ async function copyEquation(output: OutputFormat): Promise<void> {
 }
 
 source.addEventListener("input", updatePreview);
-backend.addEventListener("change", updatePreview);
+backend.addEventListener("change", () => {
+  applyPreviewScale();
+  updatePreview();
+});
+previewZoomOut.addEventListener("click", () => {
+  previewZoom = clampPreviewZoom(previewZoom - PREVIEW_ZOOM_STEP);
+  applyPreviewScale();
+});
+previewZoomIn.addEventListener("click", () => {
+  previewZoom = clampPreviewZoom(previewZoom + PREVIEW_ZOOM_STEP);
+  applyPreviewScale();
+});
 exportButtons.forEach((button) => {
   button.addEventListener("click", () => {
     const output = button.dataset.output;
@@ -111,4 +154,5 @@ exportButtons.forEach((button) => {
   });
 });
 
+applyPreviewScale();
 updatePreview();
