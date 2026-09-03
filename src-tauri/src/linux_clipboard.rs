@@ -18,8 +18,8 @@ pub fn gnome_copy_payload(uri: &str) -> Vec<u8> {
     format!("copy\n{uri}").into_bytes()
 }
 
-pub fn file_copy_targets() -> [&'static str; 2] {
-    [URI_LIST_MIME, GNOME_COPY_MIME]
+pub fn file_copy_target_info() -> [(&'static str, u32); 2] {
+    [(URI_LIST_MIME, 0), (GNOME_COPY_MIME, 1)]
 }
 
 pub fn copy_file(window: &tauri::WebviewWindow, path: &Path) -> Result<(), String> {
@@ -29,7 +29,8 @@ pub fn copy_file(window: &tauri::WebviewWindow, path: &Path) -> Result<(), Strin
 
     run_on_gtk_main_thread(window, move || {
         let clipboard = gtk::Clipboard::get(&gdk::SELECTION_CLIPBOARD);
-        let targets = file_copy_targets().map(|mime| TargetEntry::new(mime, TargetFlags::empty(), 0));
+        let targets = file_copy_target_info()
+            .map(|(mime, info)| TargetEntry::new(mime, TargetFlags::empty(), info));
         let acquired = clipboard.set_with_data(&targets, move |_, selection, info| {
             let (mime, data) = if info == 0 {
                 (URI_LIST_MIME, uri_list.as_slice())
@@ -61,7 +62,7 @@ fn run_on_gtk_main_thread(
 
 #[cfg(test)]
 mod tests {
-    use super::{file_copy_targets, file_uri, gnome_copy_payload};
+    use super::{file_copy_target_info, file_uri, gnome_copy_payload};
     use std::path::Path;
 
     #[test]
@@ -83,16 +84,24 @@ mod tests {
     #[test]
     fn file_copy_targets_include_standard_and_gnome_file_targets() {
         assert_eq!(
-            file_copy_targets(),
-            ["text/uri-list", "x-special/gnome-copied-files"]
+            file_copy_target_info().map(|(mime, _)| mime),
+            ["text/uri-list", "x-special/gnome-copied-files"],
+        );
+    }
+
+    #[test]
+    fn file_copy_targets_use_distinct_selection_info_values() {
+        assert_eq!(
+            file_copy_target_info(),
+            [("text/uri-list", 0), ("x-special/gnome-copied-files", 1)]
         );
     }
 
     #[test]
     fn svg_file_copy_uses_the_same_targets_as_pdf_file_copy() {
         assert_eq!(
-            file_copy_targets(),
-            ["text/uri-list", "x-special/gnome-copied-files"]
+            file_copy_target_info().map(|(mime, _)| mime),
+            ["text/uri-list", "x-special/gnome-copied-files"],
         );
     }
 }
