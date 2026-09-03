@@ -1,5 +1,6 @@
+use crate::error::{AppError, AppResult};
 use std::{
-    fmt, fs, io,
+    fs, io,
     path::{Path, PathBuf},
     process::Command,
     sync::atomic::{AtomicUsize, Ordering},
@@ -11,36 +12,17 @@ const TEMPLATE: &str =
 
 static DIRECTORY_COUNTER: AtomicUsize = AtomicUsize::new(0);
 
-#[derive(Debug)]
-pub struct TypstRenderError {
-    output_dir: PathBuf,
-    message: String,
-}
-
-impl fmt::Display for TypstRenderError {
-    fn fmt(&self, formatter: &mut fmt::Formatter<'_>) -> fmt::Result {
-        write!(
-            formatter,
-            "{} (output retained in {})",
-            self.message,
-            self.output_dir.display()
-        )
-    }
-}
-
-impl std::error::Error for TypstRenderError {}
-
 pub fn build_typst_source(input: &str, transparent: bool) -> String {
     TEMPLATE
         .replace("{{FILL}}", if transparent { ", fill: none" } else { "" })
         .replace("{{EQUATION}}", input)
 }
 
-pub fn render_typst(input: &str) -> Result<PathBuf, TypstRenderError> {
+pub fn render_typst(input: &str) -> AppResult<PathBuf> {
     render_typst_with_command(input, Path::new("typst"))
 }
 
-fn render_typst_with_command(input: &str, typst: &Path) -> Result<PathBuf, TypstRenderError> {
+fn render_typst_with_command(input: &str, typst: &Path) -> AppResult<PathBuf> {
     let output_dir = create_output_dir()?;
     let source_path = output_dir.join("equation.typ");
 
@@ -59,17 +41,13 @@ fn write_source(
     source_path: &Path,
     input: &str,
     transparent: bool,
-    output_dir: &Path,
-) -> Result<(), TypstRenderError> {
-    fs::write(source_path, build_typst_source(input, transparent)).map_err(|error| {
-        TypstRenderError {
-            output_dir: output_dir.to_path_buf(),
-            message: format!("failed to write {}: {error}", source_path.display()),
-        }
-    })
+    _output_dir: &Path,
+) -> AppResult<()> {
+    fs::write(source_path, build_typst_source(input, transparent))
+        .map_err(|error| AppError::io("写入 Typst 源文件", error))
 }
 
-fn create_output_dir() -> Result<PathBuf, TypstRenderError> {
+fn create_output_dir() -> AppResult<PathBuf> {
     let base = std::env::temp_dir();
     for _ in 0..100 {
         let nonce = SystemTime::now()
@@ -82,53 +60,46 @@ fn create_output_dir() -> Result<PathBuf, TypstRenderError> {
             Ok(()) => return Ok(output_dir),
             Err(error) if error.kind() == io::ErrorKind::AlreadyExists => continue,
             Err(error) => {
-                return Err(TypstRenderError {
-                    output_dir,
-                    message: format!("failed to create output directory: {error}"),
-                });
+                return Err(AppError::io("创建导出临时目录", error));
             }
         }
     }
 
-    Err(TypstRenderError {
-        output_dir: base.join("eqexport-unavailable"),
-        message: "failed to allocate a unique output directory".to_owned(),
+    Err(AppError::IoError {
+        operation: "创建导出临时目录".to_owned(),
+        message: format!("无法在 {} 分配唯一目录", base.display()),
     })
 }
 
-fn run_command(output_dir: &Path, typst: &Path, output: &str) -> Result<(), TypstRenderError> {
-    let program_name = typst.display();
+fn run_command(output_dir: &Path, typst: &Path, output: &str) -> AppResult<()> {
     let result = Command::new(typst)
         .args(["compile", "equation.typ", output])
         .current_dir(output_dir)
         .output()
-        .map_err(|error| TypstRenderError {
-            output_dir: output_dir.to_path_buf(),
-            message: format!("failed to start {program_name}: {error}"),
-        })?;
+        .map_err(|error| AppError::from_start_error("typst", "编译 Typst 公式", error))?;
 
     if result.status.success() {
         return Ok(());
     }
 
-    Err(TypstRenderError {
-        output_dir: output_dir.to_path_buf(),
-        message: format!(
-            "{program_name} exited with {}: {}",
-            result.status,
-            String::from_utf8_lossy(&result.stderr).trim()
-        ),
-    })
+    Err(AppError::process_failed(
+        "typst",
+        result.status.code(),
+        "Typst 编译失败",
+        String::from_utf8_lossy(&result.stderr).trim(),
+    ))
 }
 
-fn ensure_output_exists(output_dir: &Path, filename: &str) -> Result<(), TypstRenderError> {
+fn ensure_output_exists(output_dir: &Path, filename: &str) -> AppResult<()> {
     if output_dir.join(filename).is_file() {
         Ok(())
     } else {
-        Err(TypstRenderError {
-            output_dir: output_dir.to_path_buf(),
-            message: format!("typst succeeded but did not create {filename}"),
-        })
+        Err(AppError::process_failed(
+            "typst",
+            None,
+            format!("typst 未生成 {filename}"),
+            "",
+        ))
     }
 }
 

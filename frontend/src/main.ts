@@ -6,12 +6,16 @@ import { save } from "@tauri-apps/plugin-dialog";
 
 import {
   cancelledExportStatus,
-  copyFailureStatus,
   exportArguments,
   type Backend,
   type OutputFormat,
   saveDialogOptions,
 } from "./export";
+import {
+  errorPresentation,
+  normalizeExportError,
+  type DependencyHelp,
+} from "./export-error";
 import { renderPreview } from "./preview";
 import {
   clampPreviewZoom,
@@ -30,6 +34,11 @@ const previewZoomOutElement = document.querySelector<HTMLButtonElement>("#previe
 const previewZoomValueElement = document.querySelector<HTMLOutputElement>("#preview-zoom-value");
 const previewZoomInElement = document.querySelector<HTMLButtonElement>("#preview-zoom-in");
 const statusElement = document.querySelector<HTMLElement>("#status");
+const dependencyHelpToggleElement = document.querySelector<HTMLButtonElement>("#dependency-help-toggle");
+const dependencyHelpElement = document.querySelector<HTMLElement>("#dependency-help");
+const dependencyHelpContentElement = document.querySelector<HTMLElement>("#dependency-help-content");
+const exportErrorDetailElement = document.querySelector<HTMLDetailsElement>("#export-error-detail");
+const exportErrorDetailContentElement = document.querySelector<HTMLElement>("#export-error-detail-content");
 const exportButtons = Array.from(document.querySelectorAll<HTMLButtonElement>("[data-action][data-output]"));
 
 if (
@@ -39,7 +48,12 @@ if (
   !previewZoomOutElement ||
   !previewZoomValueElement ||
   !previewZoomInElement ||
-  !statusElement
+  !statusElement ||
+  !dependencyHelpToggleElement ||
+  !dependencyHelpElement ||
+  !dependencyHelpContentElement ||
+  !exportErrorDetailElement ||
+  !exportErrorDetailContentElement
 ) {
   throw new Error("Equation Exporter 页面缺少必要元素");
 }
@@ -51,6 +65,11 @@ const previewZoomOut = previewZoomOutElement;
 const previewZoomValue = previewZoomValueElement;
 const previewZoomIn = previewZoomInElement;
 const status = statusElement;
+const dependencyHelpToggle = dependencyHelpToggleElement;
+const dependencyHelp = dependencyHelpElement;
+const dependencyHelpContent = dependencyHelpContentElement;
+const exportErrorDetail = exportErrorDetailElement;
+const exportErrorDetailContent = exportErrorDetailContentElement;
 let previewRequest = 0;
 let previewZoom = 100;
 
@@ -86,6 +105,62 @@ function setStatus(message: string): void {
   status.textContent = message;
 }
 
+function clearExportError(): void {
+  dependencyHelpToggle.hidden = true;
+  dependencyHelpToggle.setAttribute("aria-expanded", "false");
+  dependencyHelp.hidden = true;
+  dependencyHelpContent.replaceChildren();
+  exportErrorDetail.hidden = true;
+  exportErrorDetail.open = false;
+  exportErrorDetailContent.textContent = "";
+}
+
+function textElement(tag: "h2" | "h3" | "p" | "li" | "code", text: string): HTMLElement {
+  const element = document.createElement(tag);
+  element.textContent = text;
+  return element;
+}
+
+function dependencyHelpNodes(help: DependencyHelp): Node[] {
+  const title = textElement("h2", `安装 ${help.command}`);
+  const purpose = textElement("p", `用途：${help.purpose}`);
+  const platforms = document.createElement("ul");
+  platforms.append(
+    textElement("li", `Linux：${help.instructions.linux}`),
+    textElement("li", `Windows：${help.instructions.windows}`),
+    textElement("li", `macOS：${help.instructions.macos}`),
+  );
+  const verification = document.createElement("p");
+  verification.append("安装后在终端运行：", textElement("code", help.verifyCommand));
+  const links = document.createElement("p");
+  links.append("官方与上游链接：");
+  help.links.forEach((link, index) => {
+    if (index > 0) links.append(" · ");
+    const anchor = document.createElement("a");
+    anchor.href = link.href;
+    anchor.target = "_blank";
+    anchor.rel = "noreferrer";
+    anchor.textContent = link.label;
+    links.append(anchor);
+  });
+  return [title, purpose, platforms, verification, links];
+}
+
+function showExportError(error: unknown): void {
+  const normalized = normalizeExportError(error);
+  const presentation = errorPresentation(normalized);
+  setStatus(presentation.status);
+
+  if (presentation.help) {
+    dependencyHelpToggle.hidden = false;
+    dependencyHelpContent.replaceChildren(...dependencyHelpNodes(presentation.help));
+  }
+  if (presentation.detail) {
+    exportErrorDetail.hidden = false;
+    exportErrorDetailContent.textContent = presentation.detail;
+  }
+}
+
 function setExportButtonsDisabled(disabled: boolean): void {
   exportButtons.forEach((button) => {
     button.disabled = disabled;
@@ -93,6 +168,7 @@ function setExportButtonsDisabled(disabled: boolean): void {
 }
 
 async function saveEquation(output: OutputFormat): Promise<void> {
+  clearExportError();
   const destination = await save(saveDialogOptions(output));
   if (destination === null) {
     setStatus(cancelledExportStatus());
@@ -109,7 +185,7 @@ async function saveEquation(output: OutputFormat): Promise<void> {
     });
     setStatus(`已保存：${destination}`);
   } catch (error) {
-    setStatus(`导出失败：${error instanceof Error ? error.message : String(error)}`);
+    showExportError(error);
   } finally {
     setExportButtonsDisabled(false);
   }
@@ -117,13 +193,14 @@ async function saveEquation(output: OutputFormat): Promise<void> {
 
 async function copyEquation(output: OutputFormat): Promise<void> {
   setExportButtonsDisabled(true);
+  clearExportError();
   setStatus("正在复制…");
 
   try {
     await invoke("copy_equation", exportArguments(backend.value as Backend, source.value, output));
     setStatus("已复制");
-  } catch {
-    setStatus(copyFailureStatus());
+  } catch (error) {
+    showExportError(error);
   } finally {
     setExportButtonsDisabled(false);
   }
@@ -133,6 +210,10 @@ source.addEventListener("input", updatePreview);
 backend.addEventListener("change", () => {
   applyPreviewScale();
   updatePreview();
+});
+dependencyHelpToggle.addEventListener("click", () => {
+  dependencyHelp.hidden = !dependencyHelp.hidden;
+  dependencyHelpToggle.setAttribute("aria-expanded", String(!dependencyHelp.hidden));
 });
 previewZoomOut.addEventListener("click", () => {
   previewZoom = clampPreviewZoom(previewZoom - PREVIEW_ZOOM_STEP);

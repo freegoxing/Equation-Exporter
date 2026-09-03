@@ -1,6 +1,7 @@
 #[cfg(test)]
 mod tests {
     use super::render_latex_with_commands;
+    use crate::error::AppError;
     use std::{
         env, fs,
         os::unix::fs::PermissionsExt,
@@ -71,6 +72,26 @@ printf '<svg />' > equation.svg
         );
     }
 
+    #[test]
+    fn failed_pdf2svg_process_is_not_a_missing_dependency() {
+        let fixture_dir = unique_dir("eqexport-failing-pdf2svg");
+        let pdflatex = fixture_dir.join("pdflatex");
+        let pdf2svg = fixture_dir.join("pdf2svg");
+        write_executable(&pdflatex, "#!/bin/sh\ntouch equation.pdf\n");
+        write_executable(
+            &pdf2svg,
+            "#!/bin/sh\nprintf 'pdf2svg: command not found' >&2\nexit 127\n",
+        );
+
+        let error = render_latex_with_commands(SOURCE, &pdflatex, &pdf2svg).unwrap_err();
+
+        assert!(matches!(
+            error,
+            AppError::ProcessFailed { command, exit_code: Some(127), stderr, .. }
+                if command == "pdf2svg" && stderr == "pdf2svg: command not found"
+        ));
+    }
+
     fn unique_dir(prefix: &str) -> PathBuf {
         let nonce = SystemTime::now()
             .duration_since(UNIX_EPOCH)
@@ -87,8 +108,9 @@ printf '<svg />' > equation.svg
     }
 }
 
+use crate::error::{AppError, AppResult};
 use std::{
-    fmt, fs, io,
+    fs, io,
     path::{Path, PathBuf},
     process::Command,
     sync::atomic::{AtomicUsize, Ordering},
@@ -107,32 +129,7 @@ $\displaystyle {{EQUATION}}$
 
 static DIRECTORY_COUNTER: AtomicUsize = AtomicUsize::new(0);
 
-#[derive(Debug)]
-pub struct LatexRenderError {
-    output_dir: PathBuf,
-    message: String,
-}
-
-impl LatexRenderError {
-    pub fn output_dir(&self) -> &Path {
-        &self.output_dir
-    }
-}
-
-impl fmt::Display for LatexRenderError {
-    fn fmt(&self, formatter: &mut fmt::Formatter<'_>) -> fmt::Result {
-        write!(
-            formatter,
-            "{} (output retained in {})",
-            self.message,
-            self.output_dir.display()
-        )
-    }
-}
-
-impl std::error::Error for LatexRenderError {}
-
-pub fn render_latex(source: &str) -> Result<PathBuf, LatexRenderError> {
+pub fn render_latex(source: &str) -> AppResult<PathBuf> {
     render_latex_with_commands(source, Path::new("pdflatex"), Path::new("pdf2svg"))
 }
 
@@ -140,29 +137,34 @@ fn render_latex_with_commands(
     source: &str,
     pdflatex: &Path,
     pdf2svg: &Path,
-) -> Result<PathBuf, LatexRenderError> {
+) -> AppResult<PathBuf> {
     let output_dir = create_output_dir()?;
     let tex_path = output_dir.join("equation.tex");
     let tex = TEMPLATE.replace("{{EQUATION}}", source);
-    fs::write(&tex_path, tex).map_err(|error| LatexRenderError {
-        output_dir: output_dir.clone(),
-        message: format!("failed to write {}: {error}", tex_path.display()),
-    })?;
+    fs::write(&tex_path, tex).map_err(|error| AppError::io("写入 LaTeX 源文件", error))?;
 
     run_command(
         &output_dir,
         pdflatex,
+        "pdflatex",
+        "编译 LaTeX 公式",
         ["-interaction=nonstopmode", "-halt-on-error", "equation.tex"],
     )?;
     ensure_output_exists(&output_dir, "equation.pdf", "pdflatex")?;
 
-    run_command(&output_dir, pdf2svg, ["equation.pdf", "equation.svg"])?;
+    run_command(
+        &output_dir,
+        pdf2svg,
+        "pdf2svg",
+        "将 PDF 公式转换为 SVG",
+        ["equation.pdf", "equation.svg"],
+    )?;
     ensure_output_exists(&output_dir, "equation.svg", "pdf2svg")?;
 
     Ok(output_dir)
 }
 
-fn create_output_dir() -> Result<PathBuf, LatexRenderError> {
+fn create_output_dir() -> AppResult<PathBuf> {
     let base = std::env::temp_dir();
     for _ in 0..100 {
         let nonce = SystemTime::now()
@@ -175,60 +177,55 @@ fn create_output_dir() -> Result<PathBuf, LatexRenderError> {
             Ok(()) => return Ok(output_dir),
             Err(error) if error.kind() == io::ErrorKind::AlreadyExists => continue,
             Err(error) => {
-                return Err(LatexRenderError {
-                    output_dir,
-                    message: format!("failed to create output directory: {error}"),
-                });
+                return Err(AppError::io("创建导出临时目录", error));
             }
         }
     }
 
-    Err(LatexRenderError {
-        output_dir: base.join("eqexport-unavailable"),
-        message: "failed to allocate a unique output directory".to_owned(),
+    Err(AppError::IoError {
+        operation: "创建导出临时目录".to_owned(),
+        message: format!("无法在 {} 分配唯一目录", base.display()),
     })
 }
 
 fn run_command<const N: usize>(
     output_dir: &Path,
     program: &Path,
+    command: &str,
+    purpose: &str,
     arguments: [&str; N],
-) -> Result<(), LatexRenderError> {
-    let program_name = program.display();
+) -> AppResult<()> {
     let output = Command::new(program)
         .args(arguments)
         .current_dir(output_dir)
         .output()
-        .map_err(|error| LatexRenderError {
-            output_dir: output_dir.to_path_buf(),
-            message: format!("failed to start {program_name}: {error}"),
-        })?;
+        .map_err(|error| AppError::from_start_error(command, purpose, error))?;
 
     if output.status.success() {
         return Ok(());
     }
 
-    Err(LatexRenderError {
-        output_dir: output_dir.to_path_buf(),
-        message: format!(
-            "{program_name} exited with {}: {}",
-            output.status,
-            String::from_utf8_lossy(&output.stderr).trim()
-        ),
-    })
+    Err(AppError::process_failed(
+        command,
+        output.status.code(),
+        format!("{command} 执行失败"),
+        String::from_utf8_lossy(&output.stderr).trim(),
+    ))
 }
 
 fn ensure_output_exists(
     output_dir: &Path,
     filename: &str,
     program: &'static str,
-) -> Result<(), LatexRenderError> {
+) -> AppResult<()> {
     if output_dir.join(filename).is_file() {
         Ok(())
     } else {
-        Err(LatexRenderError {
-            output_dir: output_dir.to_path_buf(),
-            message: format!("{program} succeeded but did not create {filename}"),
-        })
+        Err(AppError::process_failed(
+            program,
+            None,
+            format!("{program} 未生成 {filename}"),
+            "",
+        ))
     }
 }

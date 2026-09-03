@@ -1,18 +1,19 @@
 #[cfg(not(target_os = "linux"))]
 use clipboard_rs::{Clipboard, ClipboardContext};
 use equation_exporter::commands::{Backend, OutputFormat, export_equation};
+use equation_exporter::error::{AppError, AppResult};
 use std::{
     fs,
     path::{Path, PathBuf},
 };
 
-pub fn copy_file(source: &Path, destination: &Path) -> Result<(), String> {
+pub fn copy_file(source: &Path, destination: &Path) -> AppResult<()> {
     if let Some(parent) = destination.parent() {
-        fs::create_dir_all(parent).map_err(|error| format!("无法创建保存目录：{error}"))?;
+        fs::create_dir_all(parent).map_err(|error| AppError::io("创建保存目录", error))?;
     }
     fs::copy(source, destination)
         .map(|_| ())
-        .map_err(|error| format!("无法保存文件：{error}"))
+        .map_err(|error| AppError::io("保存文件", error))
 }
 
 #[tauri::command]
@@ -21,7 +22,7 @@ pub fn save_equation(
     backend: Backend,
     output: OutputFormat,
     destination: PathBuf,
-) -> Result<(), String> {
+) -> AppResult<()> {
     let artifact = render_artifact(source, backend, output)?;
     copy_file(&artifact, &destination)
 }
@@ -32,13 +33,13 @@ pub async fn copy_equation(
     source: String,
     backend: Backend,
     output: OutputFormat,
-) -> Result<(), String> {
+) -> AppResult<()> {
     let artifact =
         tauri::async_runtime::spawn_blocking(move || render_artifact(source, backend, output))
             .await
-            .map_err(|error| error.to_string())??;
+            .map_err(|error| AppError::io("执行导出任务", error))??;
 
-    write_clipboard(&window, &artifact, output).map_err(copy_error)
+    write_clipboard(&window, &artifact, output)
 }
 
 #[cfg(target_os = "linux")]
@@ -46,8 +47,8 @@ fn write_clipboard(
     window: &tauri::WebviewWindow,
     artifact: &Path,
     _output: OutputFormat,
-) -> Result<(), String> {
-    crate::linux_clipboard::copy_file(window, artifact)
+) -> AppResult<()> {
+    crate::linux_clipboard::copy_file(window, artifact).map_err(clipboard_error)
 }
 
 #[cfg(not(target_os = "linux"))]
@@ -55,19 +56,19 @@ fn write_clipboard(
     _window: &tauri::WebviewWindow,
     artifact: &Path,
     output: OutputFormat,
-) -> Result<(), String> {
-    let clipboard = ClipboardContext::new().map_err(copy_error)?;
+) -> AppResult<()> {
+    let clipboard = ClipboardContext::new().map_err(clipboard_error)?;
 
     match output {
         OutputFormat::Pdf => clipboard
             .set_files(vec![artifact.display().to_string()])
-            .map_err(|error| error.to_string()),
+            .map_err(clipboard_error),
         OutputFormat::Svg => clipboard
             .set_buffer(
                 svg_clipboard_format(),
-                fs::read(artifact).map_err(copy_error)?,
+                fs::read(artifact).map_err(|error| AppError::io("读取 SVG 临时文件", error))?,
             )
-            .map_err(|error| error.to_string()),
+            .map_err(clipboard_error),
     }
 }
 
@@ -75,7 +76,7 @@ fn render_artifact(
     source: String,
     backend: Backend,
     output: OutputFormat,
-) -> Result<PathBuf, String> {
+) -> AppResult<PathBuf> {
     export_equation(backend, source, output).map(PathBuf::from)
 }
 
@@ -89,8 +90,11 @@ fn svg_clipboard_format() -> &'static str {
     "image/svg+xml"
 }
 
-fn copy_error(error: impl std::fmt::Display) -> String {
-    format!("复制失败，请使用另存为：{error}")
+fn clipboard_error(error: impl std::fmt::Display) -> AppError {
+    AppError::ClipboardFailed {
+        message: "无法写入剪贴板".to_owned(),
+        detail: Some(error.to_string()),
+    }
 }
 
 #[cfg(test)]

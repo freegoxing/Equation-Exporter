@@ -45,7 +45,21 @@
         </section>
       </section>
 
-      <footer id="status" class="status" aria-live="polite">输入公式后将在此处预览</footer>
+      <footer class="status-area">
+        <div class="status-row">
+          <span id="status" class="status" aria-live="polite">输入公式后将在此处预览</span>
+          <button id="dependency-help-toggle" type="button" hidden aria-expanded="false" aria-controls="dependency-help">
+            查看解决方法
+          </button>
+        </div>
+        <section id="dependency-help" class="dependency-help" hidden aria-live="polite">
+          <div id="dependency-help-content"></div>
+        </section>
+        <details id="export-error-detail" class="export-error-detail" hidden>
+          <summary>查看详细信息</summary>
+          <pre id="export-error-detail-content"></pre>
+        </details>
+      </footer>
     </main>
     <script type="module" src="/src/main.ts"></script>
   </body>

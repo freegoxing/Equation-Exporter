@@ -1,4 +1,5 @@
 use crate::app::{latex::render_latex, typst::render_typst};
+use crate::error::AppResult;
 use std::path::{Path, PathBuf};
 
 pub use crate::app::backend::Backend;
@@ -27,10 +28,10 @@ pub fn export_equation(
     backend: Backend,
     source: String,
     output: OutputFormat,
-) -> Result<String, String> {
+) -> AppResult<String> {
     let directory = match backend {
-        Backend::Latex => render_latex(&source).map_err(|error| error.to_string())?,
-        Backend::Typst => render_typst(&source).map_err(|error| error.to_string())?,
+        Backend::Latex => render_latex(&source)?,
+        Backend::Typst => render_typst(&source)?,
     };
     Ok(artifact_path(&directory, output).display().to_string())
 }
