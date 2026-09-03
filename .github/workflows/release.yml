@@ -68,4 +68,4 @@ jobs:
           releaseDraft: false
           prerelease: false
           args: ${{ matrix.args }}
-          assetNamePattern: Equation-Exporter_[version]_[platform]_[arch][setup].[ext]
+          releaseAssetNamePattern: Equation-Exporter_[version]_[platform]_[arch][setup].[ext]
