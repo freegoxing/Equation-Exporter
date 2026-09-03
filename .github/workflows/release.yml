@@ -60,11 +60,12 @@ jobs:
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         with:
-          tauriScript: pnpm --dir frontend tauri
+          # Run the CLI from the repository root, which contains src-tauri/.
+          tauriScript: frontend/node_modules/.bin/tauri
           tagName: ${{ github.ref_name }}
           releaseName: Equation Exporter ${{ github.ref_name }}
           generateReleaseNotes: true
           releaseDraft: false
           prerelease: false
           args: ${{ matrix.args }}
-          releaseAssetNamePattern: Equation-Exporter_[version]_[platform]_[arch][setup].[ext]
+          assetNamePattern: Equation-Exporter_[version]_[platform]_[arch][setup].[ext]
