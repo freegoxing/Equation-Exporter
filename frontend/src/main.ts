@@ -11,6 +11,7 @@ import {
   type OutputFormat,
   saveDialogOptions,
 } from "./export";
+import { inputPlaceholder } from "./input-placeholder";
 import {
   errorPresentation,
   normalizeExportError,
@@ -78,6 +79,10 @@ function applyPreviewScale(): void {
   previewZoomValue.value = formatPreviewZoom(previewZoom);
   previewZoomOut.disabled = previewZoom <= PREVIEW_ZOOM_MIN;
   previewZoomIn.disabled = previewZoom >= PREVIEW_ZOOM_MAX;
+}
+
+function applyInputPlaceholder(): void {
+  source.placeholder = inputPlaceholder(backend.value as Backend);
 }
 
 function updatePreview(): void {
@@ -208,6 +213,7 @@ async function copyEquation(output: OutputFormat): Promise<void> {
 
 source.addEventListener("input", updatePreview);
 backend.addEventListener("change", () => {
+  applyInputPlaceholder();
   applyPreviewScale();
   updatePreview();
 });
@@ -235,5 +241,6 @@ exportButtons.forEach((button) => {
   });
 });
 
+applyInputPlaceholder();
 applyPreviewScale();
 updatePreview();
