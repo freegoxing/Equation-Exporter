@@ -1,6 +1,11 @@
 export type OutputFormat = "pdf" | "svg";
 export type Backend = "latex" | "typst";
 
+export function outputFormat(value: string): OutputFormat {
+  if (value === "pdf" || value === "svg") return value;
+  throw new Error(`Unsupported output format: ${value}`);
+}
+
 export function exportArguments(backend: Backend, source: string, output: OutputFormat) {
   return { backend, source, output };
 }

@@ -1,6 +1,15 @@
 import { expect, test } from "vitest";
 
-import { cancelledExportStatus, copyFailureStatus, exportArguments, saveDialogOptions } from "./export";
+import { cancelledExportStatus, copyFailureStatus, exportArguments, outputFormat, saveDialogOptions } from "./export";
+
+test("accepts PDF and SVG selector values", () => {
+  expect(outputFormat("pdf")).toBe("pdf");
+  expect(outputFormat("svg")).toBe("svg");
+});
+
+test("rejects an unsupported selector value", () => {
+  expect(() => outputFormat("png")).toThrow("Unsupported output format: png");
+});
 
 test("uses the requested format as the default save filename and filter", () => {
   expect(saveDialogOptions("svg")).toEqual({

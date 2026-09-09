@@ -7,6 +7,7 @@ import { save } from "@tauri-apps/plugin-dialog";
 import {
   cancelledExportStatus,
   exportArguments,
+  outputFormat,
   type Backend,
   type OutputFormat,
   saveDialogOptions,
@@ -40,7 +41,10 @@ const dependencyHelpElement = document.querySelector<HTMLElement>("#dependency-h
 const dependencyHelpContentElement = document.querySelector<HTMLElement>("#dependency-help-content");
 const exportErrorDetailElement = document.querySelector<HTMLDetailsElement>("#export-error-detail");
 const exportErrorDetailContentElement = document.querySelector<HTMLElement>("#export-error-detail-content");
-const exportButtons = Array.from(document.querySelectorAll<HTMLButtonElement>("[data-action][data-output]"));
+const saveEquationButtonElement = document.querySelector<HTMLButtonElement>("#save-equation");
+const copyEquationButtonElement = document.querySelector<HTMLButtonElement>("#copy-equation");
+const saveOutputElement = document.querySelector<HTMLSelectElement>("#save-output");
+const copyOutputElement = document.querySelector<HTMLSelectElement>("#copy-output");
 
 if (
   !sourceElement ||
@@ -54,7 +58,11 @@ if (
   !dependencyHelpElement ||
   !dependencyHelpContentElement ||
   !exportErrorDetailElement ||
-  !exportErrorDetailContentElement
+  !exportErrorDetailContentElement ||
+  !saveEquationButtonElement ||
+  !copyEquationButtonElement ||
+  !saveOutputElement ||
+  !copyOutputElement
 ) {
   throw new Error("Equation Exporter 页面缺少必要元素");
 }
@@ -71,6 +79,11 @@ const dependencyHelp = dependencyHelpElement;
 const dependencyHelpContent = dependencyHelpContentElement;
 const exportErrorDetail = exportErrorDetailElement;
 const exportErrorDetailContent = exportErrorDetailContentElement;
+const saveEquationButton = saveEquationButtonElement;
+const copyEquationButton = copyEquationButtonElement;
+const saveOutput = saveOutputElement;
+const copyOutput = copyOutputElement;
+const exportControls = [saveEquationButton, copyEquationButton, saveOutput, copyOutput];
 let previewRequest = 0;
 let previewZoom = 100;
 
@@ -167,8 +180,8 @@ function showExportError(error: unknown): void {
 }
 
 function setExportButtonsDisabled(disabled: boolean): void {
-  exportButtons.forEach((button) => {
-    button.disabled = disabled;
+  exportControls.forEach((control) => {
+    control.disabled = disabled;
   });
 }
 
@@ -229,16 +242,11 @@ previewZoomIn.addEventListener("click", () => {
   previewZoom = clampPreviewZoom(previewZoom + PREVIEW_ZOOM_STEP);
   applyPreviewScale();
 });
-exportButtons.forEach((button) => {
-  button.addEventListener("click", () => {
-    const output = button.dataset.output;
-    const action = button.dataset.action;
-    if ((output === "pdf" || output === "svg") && action === "save") {
-      void saveEquation(output);
-    } else if ((output === "pdf" || output === "svg") && action === "copy") {
-      void copyEquation(output);
-    }
-  });
+saveEquationButton.addEventListener("click", () => {
+  void saveEquation(outputFormat(saveOutput.value));
+});
+copyEquationButton.addEventListener("click", () => {
+  void copyEquation(outputFormat(copyOutput.value));
 });
 
 applyInputPlaceholder();
