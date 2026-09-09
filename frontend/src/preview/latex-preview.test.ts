@@ -24,9 +24,9 @@ test("renders a MathJax dynamic-font symbol as SVG", async () => {
   });
 });
 
-test("Auto falls back to MathJax for a Unicode TeX macro", async () => {
+test("reports a MathJax error when Auto fallback cannot parse a Unicode TeX macro", async () => {
   await expect(renderLatexPreview("\\unicode{x1D538}", "auto")).resolves.toMatchObject({
-    html: expect.stringContaining("<svg"),
+    error: expect.stringContaining("Undefined control sequence \\unicode"),
   });
 });
 
@@ -37,5 +37,11 @@ test("rejects invalid non-empty KaTeX input so Auto can fall back", async () => 
 test("returns a preview error when the selected engine cannot render", async () => {
   await expect(renderLatexPreview("\\notARealCommand", "katex")).resolves.toMatchObject({
     error: expect.any(String),
+  });
+});
+
+test("returns MathJax parse errors as preview errors instead of error SVGs", async () => {
+  await expect(renderLatexPreview("\\fra", "mathjax")).resolves.toMatchObject({
+    error: expect.stringContaining("Undefined control sequence \\fra"),
   });
 });

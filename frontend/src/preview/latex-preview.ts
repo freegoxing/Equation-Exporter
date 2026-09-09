@@ -69,7 +69,9 @@ export async function renderWithMathJax(source: string): Promise<PreviewResult> 
   }
 
   const node = await mathJaxDocument.convertPromise(source, { display: true });
-  return { html: mathJaxAdaptor.outerHTML(node) };
+  const html = mathJaxAdaptor.outerHTML(node);
+  const error = html.match(/data-mjx-error="([^"]+)"/)?.[1];
+  return error ? { error } : { html };
 }
 
 export async function renderLatexPreview(source: string, engine: PreviewEngine): Promise<PreviewResult> {

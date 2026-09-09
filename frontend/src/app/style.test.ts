@@ -14,3 +14,7 @@ test("styles preview-engine controls in the preview toolbar", () => {
   expect(stylesheet).toContain(".preview-engine");
   expect(stylesheet).toContain(".preview-engine[hidden] { display: none; }");
 });
+
+test("uses one error-card style for all preview engines", () => {
+  expect(stylesheet).toMatch(/#preview\.preview-error\s*\{[^}]*align-content:\s*start[^}]*justify-items:\s*start[^}]*background:\s*#fef2f2/s);
+});

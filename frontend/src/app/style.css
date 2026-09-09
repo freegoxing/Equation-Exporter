@@ -68,7 +68,7 @@ textarea:focus { border-color: #2563eb; box-shadow: 0 0 0 2px #bfdbfe; }
 
 #preview { --preview-scale: 1; display: grid; min-height: 16rem; flex: 1; place-items: center; overflow: auto; color: #334155; }
 #preview > * { zoom: var(--preview-scale, 1); }
-#preview.preview-error { align-content: start; justify-items: start; color: #b91c1c; white-space: pre-wrap; }
+#preview.preview-error { align-content: start; justify-items: start; border: 1px solid #fecaca; border-radius: .375rem; padding: .75rem; color: #b91c1c; background: #fef2f2; font-family: "SFMono-Regular", Consolas, monospace; white-space: pre-wrap; }
 .status-area { border-top: 1px solid #e5e7eb; background: #fff; font-size: .875rem; }
 .status-row { display: flex; align-items: center; justify-content: space-between; gap: .75rem; min-height: 2.75rem; padding: .75rem 1.5rem; }
 .status { color: #475569; }
