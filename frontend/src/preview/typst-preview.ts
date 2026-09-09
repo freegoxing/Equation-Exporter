@@ -1,6 +1,6 @@
-import type { PreviewResult } from "./preview";
-import mathFontUrl from "../../fonts/NewCMMath-Regular.otf?url";
-import textFontUrl from "../../fonts/NotoSans-Regular.ttf?url";
+import type { PreviewResult } from "./latex-preview";
+import mathFontUrl from "../../../fonts/NewCMMath-Regular.otf?url";
+import textFontUrl from "../../../fonts/NotoSans-Regular.ttf?url";
 
 let typstRenderer: Promise<{ svg: (options: { mainContent: string }) => Promise<string> }> | undefined;
 

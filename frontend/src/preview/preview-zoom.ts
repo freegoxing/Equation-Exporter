@@ -1,4 +1,4 @@
-import type { Backend } from "./export";
+import type { Backend } from "../export/export";
 
 export const PREVIEW_ZOOM_MIN = 50;
 export const PREVIEW_ZOOM_MAX = 200;

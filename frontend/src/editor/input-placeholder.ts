@@ -1,4 +1,4 @@
-import type { Backend } from "./export";
+import type { Backend } from "../export/export";
 
 const placeholders: Record<Backend, string> = {
   latex: "例如：\\frac{a}{b}",

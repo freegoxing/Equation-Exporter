@@ -11,14 +11,14 @@ import {
   type Backend,
   type OutputFormat,
   saveDialogOptions,
-} from "./export";
-import { inputPlaceholder } from "./input-placeholder";
+} from "../export/export";
+import { inputPlaceholder } from "../editor/input-placeholder";
 import {
   errorPresentation,
   normalizeExportError,
   type DependencyHelp,
-} from "./export-error";
-import { renderPreview } from "./preview";
+} from "../export/export-error";
+import { renderPreview } from "../preview/latex-preview";
 import {
   clampPreviewZoom,
   formatPreviewZoom,
@@ -26,8 +26,8 @@ import {
   PREVIEW_ZOOM_MIN,
   PREVIEW_ZOOM_STEP,
   previewScale,
-} from "./preview-zoom";
-import { renderTypstPreview } from "./typst-preview";
+} from "../preview/preview-zoom";
+import { renderTypstPreview } from "../preview/typst-preview";
 
 const sourceElement = document.querySelector<HTMLTextAreaElement>("#source");
 const backendElement = document.querySelector<HTMLSelectElement>("#backend");

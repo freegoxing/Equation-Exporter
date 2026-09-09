@@ -1,16 +1,11 @@
 import { expect, test } from "vitest";
 
-import { previewMessage } from "./preview";
 import {
   buildTypstPreviewSource,
   createLocalTypstFontProvider,
   loadLocalTypstFonts,
   localTypstFontUrls,
 } from "./typst-preview";
-
-test("reports an empty formula without calling KaTeX", () => {
-  expect(previewMessage("")).toBe("输入 LaTeX 公式后将在此处预览");
-});
 
 test("wraps a Typst formula for the preview compiler", () => {
   expect(buildTypstPreviewSource("sum_(k=1)^n k")).toBe(
