@@ -46,6 +46,9 @@ select { border: 1px solid #cbd5e1; border-radius: .375rem; padding: .45rem .6re
 .pane { display: flex; min-height: 0; flex-direction: column; gap: .75rem; padding: 1rem 1.5rem; background: #fff; }
 .editor-pane { cursor: text; }
 .preview-heading { display: flex; align-items: center; justify-content: space-between; gap: .75rem; }
+.preview-tools { display: flex; align-items: center; justify-content: flex-end; gap: .75rem; }
+.preview-engine { display: flex; align-items: center; gap: .35rem; color: #475569; font-size: .75rem; }
+.preview-engine[hidden] { display: none; }
 .preview-zoom { display: flex; align-items: center; gap: .35rem; }
 .preview-zoom button { min-width: 2rem; padding: .2rem .45rem; font-size: 1rem; line-height: 1; }
 .preview-zoom output { min-width: 3.25rem; text-align: center; color: #475569; font-size: .875rem; }
@@ -83,5 +86,6 @@ textarea:focus { border-color: #2563eb; box-shadow: 0 0 0 2px #bfdbfe; }
 @media (max-width: 720px) {
   .toolbar { align-items: flex-start; flex-direction: column; }
   .workspace { grid-template-columns: 1fr; grid-template-rows: minmax(18rem, 1fr) minmax(18rem, 1fr); }
+  .preview-heading, .preview-tools, .preview-engine { align-items: flex-start; flex-direction: column; }
   .status-row { align-items: flex-start; flex-direction: column; }
 }

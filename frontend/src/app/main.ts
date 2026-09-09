@@ -18,7 +18,12 @@ import {
   normalizeExportError,
   type DependencyHelp,
 } from "../export/export-error";
-import { renderPreview } from "../preview/latex-preview";
+import { renderLatexPreview } from "../preview/latex-preview";
+import {
+  readPreviewEngine,
+  writePreviewEngine,
+  type PreviewEngine,
+} from "../preview/preview-engine";
 import {
   clampPreviewZoom,
   formatPreviewZoom,
@@ -35,6 +40,8 @@ const previewElement = document.querySelector<HTMLElement>("#preview");
 const previewZoomOutElement = document.querySelector<HTMLButtonElement>("#preview-zoom-out");
 const previewZoomValueElement = document.querySelector<HTMLOutputElement>("#preview-zoom-value");
 const previewZoomInElement = document.querySelector<HTMLButtonElement>("#preview-zoom-in");
+const previewEngineElement = document.querySelector<HTMLSelectElement>("#preview-engine");
+const previewEngineControlElement = document.querySelector<HTMLElement>(".preview-engine");
 const statusElement = document.querySelector<HTMLElement>("#status");
 const dependencyHelpToggleElement = document.querySelector<HTMLButtonElement>("#dependency-help-toggle");
 const dependencyHelpElement = document.querySelector<HTMLElement>("#dependency-help");
@@ -53,6 +60,8 @@ if (
   !previewZoomOutElement ||
   !previewZoomValueElement ||
   !previewZoomInElement ||
+  !previewEngineElement ||
+  !previewEngineControlElement ||
   !statusElement ||
   !dependencyHelpToggleElement ||
   !dependencyHelpElement ||
@@ -73,6 +82,8 @@ const preview = previewElement;
 const previewZoomOut = previewZoomOutElement;
 const previewZoomValue = previewZoomValueElement;
 const previewZoomIn = previewZoomInElement;
+const previewEngine = previewEngineElement;
+const previewEngineControl = previewEngineControlElement;
 const status = statusElement;
 const dependencyHelpToggle = dependencyHelpToggleElement;
 const dependencyHelp = dependencyHelpElement;
@@ -98,9 +109,15 @@ function applyInputPlaceholder(): void {
   source.placeholder = inputPlaceholder(backend.value as Backend);
 }
 
+function applyPreviewEngine(): void {
+  previewEngineControl.hidden = backend.value !== "latex";
+}
+
 function updatePreview(): void {
   const request = ++previewRequest;
-  const render = backend.value === "typst" ? renderTypstPreview(source.value) : Promise.resolve(renderPreview(source.value));
+  const render = backend.value === "typst"
+    ? renderTypstPreview(source.value)
+    : renderLatexPreview(source.value, previewEngine.value as PreviewEngine);
 
   void render.then((result) => {
     if (request !== previewRequest) {
@@ -227,7 +244,13 @@ async function copyEquation(output: OutputFormat): Promise<void> {
 source.addEventListener("input", updatePreview);
 backend.addEventListener("change", () => {
   applyInputPlaceholder();
+  applyPreviewEngine();
   applyPreviewScale();
+  updatePreview();
+});
+previewEngine.addEventListener("change", () => {
+  writePreviewEngine(previewEngine.value as PreviewEngine, localStorage);
+  applyPreviewEngine();
   updatePreview();
 });
 dependencyHelpToggle.addEventListener("click", () => {
@@ -250,5 +273,7 @@ copyEquationButton.addEventListener("click", () => {
 });
 
 applyInputPlaceholder();
+previewEngine.value = readPreviewEngine(localStorage);
+applyPreviewEngine();
 applyPreviewScale();
 updatePreview();

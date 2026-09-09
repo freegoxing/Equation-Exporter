@@ -18,6 +18,8 @@
 | LaTeX（SVG） | `pdf2svg` | 将生成的 PDF 转换为 SVG | [pdf2svg 上游](https://github.com/dawbarton/pdf2svg)；macOS 可用 [Homebrew](https://formulae.brew.sh/formula/pdf2svg)，Windows 可用 [MSYS2](https://packages.msys2.org/packages/mingw-w64-ucrt-x86_64-pdf2svg)；运行 `pdf2svg --help` |
 | Typst（PDF/SVG） | `typst` | 编译 Typst 公式 | [Typst 官方网站](https://typst.app/)；运行 `typst --version` |
 
+如果暂未安装 `pdf2svg`，可在 LaTeX 预览的 **Preview Engine** 中选择 **MathJax — Compatible**，获得本地生成的 SVG 预览，适合检查更复杂的 TeX 输入。该选项不替代“另存为”或“复制”的 LaTeX SVG 导出；这些导出操作仍需要 `pdf2svg`。
+
 常见安装方式：
 
 - Linux：使用发行版的软件包管理器安装 TeX Live 与 `pdf2svg`；根据 [Typst 官方说明](https://typst.app/) 安装 `typst`。
@@ -46,13 +48,3 @@ pnpm test
 ```bash
 pnpm --dir frontend build
 ```
-
-## 发布
-
-推送 `v*` 格式的版本标签会触发 GitHub Actions，自动创建 GitHub Release 并上传：
-
-- Windows x64：NSIS `.exe` 和 `.msi`。
-- macOS Apple Silicon 与 Intel：`.dmg`。
-- Linux x64：`.AppImage`、`.deb` 和 `.rpm`。
-
-当前发布产物未进行 Windows 代码签名或 macOS 公证；首次运行时系统可能显示安全提示。

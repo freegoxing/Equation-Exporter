@@ -47,10 +47,20 @@
         <section class="pane preview-pane" aria-labelledby="preview-title">
           <div class="preview-heading">
             <h2 id="preview-title" class="pane-title">预览</h2>
-            <div class="preview-zoom" aria-label="预览缩放">
-              <button id="preview-zoom-out" type="button" aria-label="缩小预览">−</button>
-              <output id="preview-zoom-value" for="preview-zoom-out preview-zoom-in">100%</output>
-              <button id="preview-zoom-in" type="button" aria-label="放大预览">+</button>
+            <div class="preview-tools">
+              <label class="preview-engine" for="preview-engine">
+                <span>Preview Engine</span>
+                <select id="preview-engine">
+                  <option value="auto">Auto — Fast first, compatible fallback</option>
+                  <option value="katex">KaTeX — Fast</option>
+                  <option value="mathjax">MathJax — Compatible</option>
+                </select>
+              </label>
+              <div class="preview-zoom" aria-label="预览缩放">
+                <button id="preview-zoom-out" type="button" aria-label="缩小预览">−</button>
+                <output id="preview-zoom-value" for="preview-zoom-out preview-zoom-in">100%</output>
+                <button id="preview-zoom-in" type="button" aria-label="放大预览">+</button>
+              </div>
             </div>
           </div>
           <div id="preview" aria-live="polite"></div>
