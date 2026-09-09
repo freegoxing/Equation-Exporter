@@ -2,6 +2,16 @@ import { expect, test } from "vitest";
 
 import { previewMessage, renderLatexPreview, renderWithKatex } from "./latex-preview";
 
+const katexCompatibleCommonTex = [
+  "\\begin{bmatrix}a & b\\\\ c & d\\end{bmatrix}",
+  "\\cancel{x}",
+  "\\color{red}{x}",
+  "\\xmapsto{f}",
+  "a \\coloneqq b",
+  "\\newcommand{\\foo}{x}\\foo",
+  "\\text{hello}",
+];
+
 test("reports an empty formula without calling KaTeX", () => {
   expect(previewMessage("")).toBe("输入 LaTeX 公式后将在此处预览");
 });
@@ -16,6 +26,25 @@ test("renders an explicit MathJax preview as SVG", async () => {
   await expect(renderLatexPreview("x^2", "mathjax")).resolves.toMatchObject({
     html: expect.stringContaining("<svg"),
   });
+});
+
+test("renders an AMS bmatrix with MathJax", async () => {
+  await expect(
+    renderLatexPreview("\\begin{bmatrix}a & b\\\\ c & d\\end{bmatrix}", "mathjax"),
+  ).resolves.toMatchObject({
+    html: expect.stringContaining("<svg"),
+  });
+});
+
+test("renders common KaTeX-compatible TeX with MathJax", async () => {
+  for (const source of katexCompatibleCommonTex) {
+    await expect(renderWithKatex(source)).resolves.toMatchObject({
+      html: expect.stringContaining("katex"),
+    });
+    await expect(renderLatexPreview(source, "mathjax")).resolves.toMatchObject({
+      html: expect.stringContaining("<svg"),
+    });
+  }
 });
 
 test("renders a MathJax dynamic-font symbol as SVG", async () => {
