@@ -13,6 +13,7 @@ import {
   saveDialogOptions,
 } from "../export/export";
 import { inputPlaceholder } from "../editor/input-placeholder";
+import { createTextHistory } from "../editor/text-history";
 import {
   errorPresentation,
   normalizeExportError,
@@ -95,6 +96,7 @@ const copyEquationButton = copyEquationButtonElement;
 const saveOutput = saveOutputElement;
 const copyOutput = copyOutputElement;
 const exportControls = [saveEquationButton, copyEquationButton, saveOutput, copyOutput];
+const sourceHistory = createTextHistory(source.value);
 let previewRequest = 0;
 let previewZoom = 100;
 
@@ -134,6 +136,15 @@ function updatePreview(): void {
 
     applyPreviewScale();
   });
+}
+
+function applyHistoryValue(value: string | undefined): void {
+  if (value === undefined) {
+    return;
+  }
+
+  source.value = value;
+  updatePreview();
 }
 
 function setStatus(message: string): void {
@@ -241,7 +252,23 @@ async function copyEquation(output: OutputFormat): Promise<void> {
   }
 }
 
-source.addEventListener("input", updatePreview);
+source.addEventListener("input", () => {
+  sourceHistory.record(source.value);
+  updatePreview();
+});
+source.addEventListener("keydown", (event) => {
+  if (!event.ctrlKey && !event.metaKey) {
+    return;
+  }
+
+  if (event.key.toLowerCase() === "z") {
+    event.preventDefault();
+    applyHistoryValue(event.shiftKey ? sourceHistory.redo() : sourceHistory.undo());
+  } else if (event.key.toLowerCase() === "y") {
+    event.preventDefault();
+    applyHistoryValue(sourceHistory.redo());
+  }
+});
 backend.addEventListener("change", () => {
   applyInputPlaceholder();
   applyPreviewEngine();
