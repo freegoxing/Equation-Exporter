@@ -44,7 +44,7 @@
 
 ## 开发
 
-需要 Rust stable、Node.js 24 和 pnpm 11。
+需要 Rust stable、Node.js 24 和 pnpm 12.4.1。
 
 ```bash
 pnpm install --frozen-lockfile
@@ -62,3 +62,7 @@ pnpm test
 ```bash
 pnpm --dir frontend build
 ```
+
+## 许可证
+
+MIT，见 [LICENSE](LICENSE)。
