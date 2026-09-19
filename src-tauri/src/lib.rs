@@ -1,6 +1,7 @@
 mod export;
 #[cfg(target_os = "linux")]
 mod linux_clipboard;
+mod wps_office;
 #[cfg(debug_assertions)]
 use std::{
     io,
@@ -17,7 +18,11 @@ pub fn run() {
 
     tauri::Builder::default()
         .plugin(tauri_plugin_dialog::init())
-        .invoke_handler(tauri::generate_handler![export::save_equation, export::copy_equation])
+        .invoke_handler(tauri::generate_handler![
+            export::save_equation,
+            export::copy_equation,
+            export::copy_wps_formula
+        ])
         .run(tauri::generate_context!())
         .expect("error while running Equation Exporter");
 }

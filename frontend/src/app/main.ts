@@ -6,9 +6,14 @@ import { save } from "@tauri-apps/plugin-dialog";
 
 import {
   cancelledExportStatus,
+  copyFormat,
+  copyOptionsForBackend,
   exportArguments,
+  officeFormulaArguments,
   outputFormat,
+  selectedCopyFormatForBackend,
   type Backend,
+  type CopyFormat,
   type OutputFormat,
   saveDialogOptions,
 } from "../export/export";
@@ -19,7 +24,8 @@ import {
   normalizeExportError,
   type DependencyHelp,
 } from "../export/export-error";
-import { renderLatexPreview } from "../preview/latex-preview";
+import { renderLatexMathml, renderLatexPreview } from "../preview/latex-preview";
+import { mathmlToOmml } from "../export/omml";
 import {
   readPreviewEngine,
   writePreviewEngine,
@@ -237,19 +243,38 @@ async function saveEquation(output: OutputFormat): Promise<void> {
   }
 }
 
-async function copyEquation(output: OutputFormat): Promise<void> {
+async function copyEquation(output: CopyFormat): Promise<void> {
   setExportButtonsDisabled(true);
   clearExportError();
   setStatus("正在复制…");
 
   try {
-    await invoke("copy_equation", exportArguments(backend.value as Backend, source.value, output));
+    if (output === "wps-omml") {
+      const mathml = await renderLatexMathml(source.value);
+      const omml = mathmlToOmml(mathml);
+      await invoke("copy_wps_formula", officeFormulaArguments(omml, source.value));
+    } else {
+      await invoke("copy_equation", exportArguments(backend.value as Backend, source.value, output));
+    }
     setStatus("已复制");
   } catch (error) {
     showExportError(error);
   } finally {
     setExportButtonsDisabled(false);
   }
+}
+
+function syncCopyOutput(backend: Backend): void {
+  const selected = copyFormat(copyOutput.value);
+  copyOutput.replaceChildren(
+    ...copyOptionsForBackend(backend).map(({ value, label }) => {
+      const option = document.createElement("option");
+      option.value = value;
+      option.textContent = label;
+      return option;
+    }),
+  );
+  copyOutput.value = selectedCopyFormatForBackend(backend, selected);
 }
 
 source.addEventListener("input", () => {
@@ -270,6 +295,7 @@ source.addEventListener("keydown", (event) => {
   }
 });
 backend.addEventListener("change", () => {
+  syncCopyOutput(backend.value as Backend);
   applyInputPlaceholder();
   applyPreviewEngine();
   applyPreviewScale();
@@ -296,9 +322,10 @@ saveEquationButton.addEventListener("click", () => {
   void saveEquation(outputFormat(saveOutput.value));
 });
 copyEquationButton.addEventListener("click", () => {
-  void copyEquation(outputFormat(copyOutput.value));
+  void copyEquation(copyFormat(copyOutput.value));
 });
 
+syncCopyOutput(backend.value as Backend);
 applyInputPlaceholder();
 previewEngine.value = readPreviewEngine(localStorage);
 applyPreviewEngine();

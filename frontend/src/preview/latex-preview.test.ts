@@ -1,6 +1,11 @@
 import { expect, test } from "vitest";
 
-import { previewMessage, renderLatexPreview, renderWithKatex } from "./latex-preview";
+import {
+  previewMessage,
+  renderLatexMathml,
+  renderLatexPreview,
+  renderWithKatex,
+} from "./latex-preview";
 
 const katexCompatibleCommonTex = [
   "\\begin{bmatrix}a & b\\\\ c & d\\end{bmatrix}",
@@ -73,4 +78,34 @@ test("returns MathJax parse errors as preview errors instead of error SVGs", asy
   await expect(renderLatexPreview("\\fra", "mathjax")).resolves.toMatchObject({
     error: expect.stringContaining("Undefined control sequence \\fra"),
   });
+});
+
+test("renders standalone MathML after a labelled preview", async () => {
+  await expect(renderLatexPreview("\\label{eq:before}x^2", "mathjax")).resolves.toMatchObject({
+    html: expect.stringContaining("<svg"),
+  });
+
+  const mathml = await renderLatexMathml("x^2");
+
+  expect(mathml).toMatch(/^<math\b/);
+  expect(mathml).toMatch(/<msup\b/);
+  expect(mathml).not.toContain("mjx-container");
+  expect(mathml).not.toContain("eq:before");
+  expect(mathml).toMatch(/<\/math>$/);
+});
+
+test("keeps repeated MathML conversions independent of labels", async () => {
+  const first = await renderLatexMathml("\\label{eq:first}\\frac{a}{b}");
+  const second = await renderLatexMathml("\\label{eq:second}\\sqrt{x}");
+  const repeat = await renderLatexMathml("\\label{eq:first}\\frac{a}{b}");
+
+  expect(first).toMatch(/<mfrac\b/);
+  expect(second).toMatch(/<msqrt\b/);
+  expect(second).not.toContain("eq:first");
+  expect(repeat).toBe(first);
+});
+
+test("rejects blank and invalid MathML conversion input", async () => {
+  await expect(renderLatexMathml("  ")).rejects.toThrow();
+  await expect(renderLatexMathml("\\notARealCommand")).rejects.toThrow();
 });

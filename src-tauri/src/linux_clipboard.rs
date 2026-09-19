@@ -4,6 +4,9 @@ use url::Url;
 
 const URI_LIST_MIME: &str = "text/uri-list";
 const GNOME_COPY_MIME: &str = "x-special/gnome-copied-files";
+const WPS_FORMULA_MIME: &str = "Kingsoft WPS 9.0 Format";
+const PLAIN_TEXT_MIME: &str = "text/plain;charset=utf-8";
+const UTF8_STRING_MIME: &str = "UTF8_STRING";
 
 pub fn file_uri(path: &Path) -> Result<String, String> {
     if !path.is_absolute() {
@@ -20,6 +23,44 @@ pub fn gnome_copy_payload(uri: &str) -> Vec<u8> {
 
 pub fn file_copy_target_info() -> [(&'static str, u32); 2] {
     [(URI_LIST_MIME, 0), (GNOME_COPY_MIME, 1)]
+}
+
+pub fn wps_formula_target_info() -> [(&'static str, u32); 3] {
+    [
+        (WPS_FORMULA_MIME, 0),
+        (PLAIN_TEXT_MIME, 1),
+        (UTF8_STRING_MIME, 2),
+    ]
+}
+
+pub fn copy_wps_formula(
+    window: &tauri::WebviewWindow,
+    document: Vec<u8>,
+    latex: String,
+) -> Result<(), String> {
+    run_on_gtk_main_thread(window, move || {
+        let clipboard = gtk::Clipboard::get(&gdk::SELECTION_CLIPBOARD);
+        let targets = wps_formula_target_info()
+            .map(|(mime, info)| TargetEntry::new(mime, TargetFlags::empty(), info));
+        let acquired = clipboard.set_with_data(&targets, move |_, selection, info| {
+            let (mime, data) = match info {
+                0 => (WPS_FORMULA_MIME, document.as_slice()),
+                1 | 2 => (
+                    if info == 1 {
+                        PLAIN_TEXT_MIME
+                    } else {
+                        UTF8_STRING_MIME
+                    },
+                    latex.as_bytes(),
+                ),
+                _ => return,
+            };
+            selection.set(&gdk::Atom::intern(mime), 8, data);
+        });
+        acquired
+            .then_some(())
+            .ok_or_else(|| "GTK 未能取得剪贴板所有权".to_owned())
+    })
 }
 
 pub fn copy_file(window: &tauri::WebviewWindow, path: &Path) -> Result<(), String> {
@@ -62,7 +103,7 @@ fn run_on_gtk_main_thread(
 
 #[cfg(test)]
 mod tests {
-    use super::{file_copy_target_info, file_uri, gnome_copy_payload};
+    use super::{file_copy_target_info, file_uri, gnome_copy_payload, wps_formula_target_info};
     use std::path::Path;
 
     #[test]
@@ -102,6 +143,18 @@ mod tests {
         assert_eq!(
             file_copy_target_info().map(|(mime, _)| mime),
             ["text/uri-list", "x-special/gnome-copied-files"],
+        );
+    }
+
+    #[test]
+    fn advertises_wps_native_then_plain_text_targets() {
+        assert_eq!(
+            wps_formula_target_info(),
+            [
+                ("Kingsoft WPS 9.0 Format", 0),
+                ("text/plain;charset=utf-8", 1),
+                ("UTF8_STRING", 2),
+            ],
         );
     }
 }

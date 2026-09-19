@@ -42,6 +42,28 @@ pub async fn copy_equation(
     write_clipboard(&window, &artifact, output)
 }
 
+#[tauri::command]
+pub async fn copy_wps_formula(
+    window: tauri::WebviewWindow,
+    omml: String,
+    latex: String,
+) -> AppResult<()> {
+    #[cfg(target_os = "linux")]
+    {
+        let document = crate::wps_office::document_from_omml(&omml).map_err(clipboard_error)?;
+        crate::linux_clipboard::copy_wps_formula(&window, document, latex).map_err(clipboard_error)
+    }
+
+    #[cfg(not(target_os = "linux"))]
+    {
+        let _ = (window, omml, latex);
+        Err(AppError::ClipboardFailed {
+            message: "当前平台暂不支持 Word/WPS 公式复制".to_owned(),
+            detail: None,
+        })
+    }
+}
+
 #[cfg(target_os = "linux")]
 fn write_clipboard(
     window: &tauri::WebviewWindow,

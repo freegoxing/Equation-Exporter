@@ -12,6 +12,9 @@ import "@mathjax/src/js/input/tex/newcommand/NewcommandConfiguration.js";
 import "@mathjax/src/js/input/tex/textmacros/TextMacrosConfiguration.js";
 import { mathjax } from "@mathjax/src/js/mathjax.js";
 import { SVG } from "@mathjax/src/js/output/svg.js";
+import { SerializedMmlVisitor } from "@mathjax/src/js/core/MmlTree/SerializedMmlVisitor.js";
+import { STATE } from "@mathjax/src/js/core/MathItem.js";
+import type { MmlNode } from "@mathjax/src/js/core/MmlTree/MmlNode.js";
 
 import {
   renderWithPreviewEngine,
@@ -27,6 +30,16 @@ const mathJaxDynamicFontModules = import.meta.glob(
   "./../../node_modules/@mathjax/mathjax-newcm-font/mjs/svg/dynamic/*.js",
 );
 const mathJaxAdaptor = liteAdaptor();
+const mathJaxTexPackages = [
+  "base",
+  "ams",
+  "cancel",
+  "color",
+  "extpfeil",
+  "mathtools",
+  "newcommand",
+  "textmacros",
+];
 RegisterHTMLHandler(mathJaxAdaptor);
 mathjax.asyncLoad = async (name: string) => {
   if (name.startsWith("@mathjax/mathjax-newcm-font/js/svg/dynamic/")) {
@@ -40,10 +53,17 @@ mathjax.asyncLoad = async (name: string) => {
 };
 const mathJaxDocument = mathjax.document("", {
   InputJax: new TeX({
-    packages: ["base", "ams", "cancel", "color", "extpfeil", "mathtools", "newcommand", "textmacros"],
+    packages: mathJaxTexPackages,
   }),
   OutputJax: new SVG({ font: new MathJaxNewcmFont(), fontCache: "local" }),
 });
+
+function createMathJaxMathmlDocument() {
+  return mathjax.document("", {
+    InputJax: new TeX({ packages: [...mathJaxTexPackages] }),
+    OutputJax: new SVG({ font: new MathJaxNewcmFont(), fontCache: "local" }),
+  });
+}
 
 export function previewMessage(source: string): string {
   return source.trim() === "" ? EMPTY_PREVIEW_MESSAGE : "";
@@ -81,6 +101,28 @@ export async function renderWithMathJax(source: string): Promise<PreviewResult> 
   const html = mathJaxAdaptor.outerHTML(node);
   const error = html.match(/data-mjx-error="([^"]+)"/)?.[1];
   return error ? { error } : { html };
+}
+
+export async function renderLatexMathml(source: string): Promise<string> {
+  if (source.trim() === "") {
+    throw new Error("请输入 LaTeX 公式");
+  }
+
+  // A fresh input jax and document for every request prevents label/newcommand
+  // state from a preview or an earlier copy from reaching this conversion.
+  const document = createMathJaxMathmlDocument();
+  const root = await document.convertPromise(source, {
+    display: true,
+    end: STATE.CONVERT,
+  });
+  const mathml = new SerializedMmlVisitor().visitTree(root as MmlNode);
+  if (!mathml.startsWith("<math") || !mathml.endsWith("</math>")) {
+    throw new Error("MathJax did not produce a standalone MathML root");
+  }
+  if (mathml.includes("<merror")) {
+    throw new Error("MathJax could not parse the formula");
+  }
+  return mathml;
 }
 
 export async function renderLatexPreview(source: string, engine: PreviewEngine): Promise<PreviewResult> {
