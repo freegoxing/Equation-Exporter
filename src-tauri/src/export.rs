@@ -1,11 +1,15 @@
 #[cfg(not(target_os = "linux"))]
 use clipboard_rs::{Clipboard, ClipboardContext};
-use equation_exporter::commands::{Backend, OutputFormat, export_equation};
+use equation_exporter::commands::{Backend, OutputFormat, RenderedArtifact, export_equation};
 use equation_exporter::error::{AppError, AppResult};
 use std::{
     fs,
     path::{Path, PathBuf},
+    sync::Mutex,
 };
+
+#[derive(Default)]
+pub struct ClipboardArtifact(Mutex<Option<RenderedArtifact>>);
 
 pub fn copy_file(source: &Path, destination: &Path) -> AppResult<()> {
     if let Some(parent) = destination.parent() {
@@ -17,19 +21,24 @@ pub fn copy_file(source: &Path, destination: &Path) -> AppResult<()> {
 }
 
 #[tauri::command]
-pub fn save_equation(
+pub async fn save_equation(
     source: String,
     backend: Backend,
     output: OutputFormat,
     destination: PathBuf,
 ) -> AppResult<()> {
-    let artifact = render_artifact(source, backend, output)?;
-    copy_file(&artifact, &destination)
+    tauri::async_runtime::spawn_blocking(move || {
+        let artifact = render_artifact(source, backend, output)?;
+        copy_file(&artifact.path(), &destination)
+    })
+    .await
+    .map_err(|error| AppError::io("执行导出任务", error))?
 }
 
 #[tauri::command]
 pub async fn copy_equation(
     window: tauri::WebviewWindow,
+    clipboard_artifact: tauri::State<'_, ClipboardArtifact>,
     source: String,
     backend: Backend,
     output: OutputFormat,
@@ -39,7 +48,13 @@ pub async fn copy_equation(
             .await
             .map_err(|error| AppError::io("执行导出任务", error))??;
 
-    write_clipboard(&window, &artifact, output)
+    write_clipboard(&window, &artifact.path(), output)?;
+    let mut current = clipboard_artifact
+        .0
+        .lock()
+        .map_err(|error| AppError::io("保留剪贴板文件", error))?;
+    *current = Some(artifact);
+    Ok(())
 }
 
 #[tauri::command]
@@ -98,8 +113,8 @@ fn render_artifact(
     source: String,
     backend: Backend,
     output: OutputFormat,
-) -> AppResult<PathBuf> {
-    export_equation(backend, source, output).map(PathBuf::from)
+) -> AppResult<RenderedArtifact> {
+    export_equation(backend, source, output)
 }
 
 #[cfg(target_os = "macos")]

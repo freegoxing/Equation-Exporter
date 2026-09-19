@@ -1,4 +1,4 @@
-use gtk::{gdk, TargetEntry, TargetFlags};
+use gtk::{TargetEntry, TargetFlags, gdk};
 use std::{path::Path, sync::mpsc};
 use url::Url;
 

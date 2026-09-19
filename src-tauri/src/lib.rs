@@ -17,6 +17,7 @@ pub fn run() {
         .expect("failed to start the Equation Exporter frontend development server");
 
     tauri::Builder::default()
+        .manage(export::ClipboardArtifact::default())
         .plugin(tauri_plugin_dialog::init())
         .invoke_handler(tauri::generate_handler![
             export::save_equation,

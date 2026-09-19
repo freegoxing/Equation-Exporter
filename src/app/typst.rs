@@ -1,16 +1,11 @@
-use crate::error::{AppError, AppResult};
-use std::{
-    fs, io,
-    path::{Path, PathBuf},
-    process::Command,
-    sync::atomic::{AtomicUsize, Ordering},
-    time::{SystemTime, UNIX_EPOCH},
+use crate::{
+    commands::OutputFormat,
+    error::{AppError, AppResult},
 };
+use std::{fs, path::Path, process::Command};
 
 const TEMPLATE: &str =
     "#set page(width: auto, height: auto, margin: 0pt{{FILL}})\n\n$ {{EQUATION}} $\n";
-
-static DIRECTORY_COUNTER: AtomicUsize = AtomicUsize::new(0);
 
 pub fn build_typst_source(input: &str, transparent: bool) -> String {
     TEMPLATE
@@ -18,57 +13,26 @@ pub fn build_typst_source(input: &str, transparent: bool) -> String {
         .replace("{{EQUATION}}", input)
 }
 
-pub fn render_typst(input: &str) -> AppResult<PathBuf> {
-    render_typst_with_command(input, Path::new("typst"))
+pub fn render_typst(input: &str, output: OutputFormat, output_dir: &Path) -> AppResult<()> {
+    render_typst_with_command(input, output, output_dir, Path::new("typst"))
 }
 
-fn render_typst_with_command(input: &str, typst: &Path) -> AppResult<PathBuf> {
-    let output_dir = create_output_dir()?;
+fn render_typst_with_command(
+    input: &str,
+    output: OutputFormat,
+    output_dir: &Path,
+    typst: &Path,
+) -> AppResult<()> {
     let source_path = output_dir.join("equation.typ");
 
-    write_source(&source_path, input, false, &output_dir)?;
-    run_command(&output_dir, typst, "equation.pdf")?;
-    ensure_output_exists(&output_dir, "equation.pdf")?;
-
-    write_source(&source_path, input, true, &output_dir)?;
-    run_command(&output_dir, typst, "equation.svg")?;
-    ensure_output_exists(&output_dir, "equation.svg")?;
-
-    Ok(output_dir)
+    write_source(&source_path, input, matches!(output, OutputFormat::Svg))?;
+    run_command(output_dir, typst, output.filename())?;
+    ensure_output_exists(output_dir, output.filename())
 }
 
-fn write_source(
-    source_path: &Path,
-    input: &str,
-    transparent: bool,
-    _output_dir: &Path,
-) -> AppResult<()> {
+fn write_source(source_path: &Path, input: &str, transparent: bool) -> AppResult<()> {
     fs::write(source_path, build_typst_source(input, transparent))
         .map_err(|error| AppError::io("写入 Typst 源文件", error))
-}
-
-fn create_output_dir() -> AppResult<PathBuf> {
-    let base = std::env::temp_dir();
-    for _ in 0..100 {
-        let nonce = SystemTime::now()
-            .duration_since(UNIX_EPOCH)
-            .unwrap_or_default()
-            .as_nanos();
-        let counter = DIRECTORY_COUNTER.fetch_add(1, Ordering::Relaxed);
-        let output_dir = base.join(format!("eqexport-{}-{nonce}-{counter}", std::process::id()));
-        match fs::create_dir(&output_dir) {
-            Ok(()) => return Ok(output_dir),
-            Err(error) if error.kind() == io::ErrorKind::AlreadyExists => continue,
-            Err(error) => {
-                return Err(AppError::io("创建导出临时目录", error));
-            }
-        }
-    }
-
-    Err(AppError::IoError {
-        operation: "创建导出临时目录".to_owned(),
-        message: format!("无法在 {} 分配唯一目录", base.display()),
-    })
 }
 
 fn run_command(output_dir: &Path, typst: &Path, output: &str) -> AppResult<()> {
@@ -106,6 +70,7 @@ fn ensure_output_exists(output_dir: &Path, filename: &str) -> AppResult<()> {
 #[cfg(test)]
 mod tests {
     use super::{build_typst_source, render_typst_with_command};
+    use crate::commands::OutputFormat;
     use std::{
         env, fs,
         os::unix::fs::PermissionsExt,
@@ -128,7 +93,7 @@ mod tests {
     }
 
     #[test]
-    fn renders_pdf_and_svg_with_typst() {
+    fn renders_only_the_requested_pdf_with_typst() {
         let fixture_dir = unique_dir("eqexport-typst-test-bin");
         let typst = fixture_dir.join("typst");
         write_executable(
@@ -145,16 +110,33 @@ printf '%s' "$3" > "$3"
 "#,
         );
 
-        let output_dir = render_typst_with_command("x", &typst).unwrap();
+        let output_dir = unique_dir("eqexport-typst-output");
+        render_typst_with_command("x", OutputFormat::Pdf, &output_dir, &typst).unwrap();
 
         assert_eq!(
             fs::read_to_string(output_dir.join("equation.pdf")).unwrap(),
             "equation.pdf"
         );
+        assert!(!output_dir.join("equation.svg").exists());
+    }
+
+    #[test]
+    fn renders_only_the_requested_svg_with_transparent_page() {
+        let fixture_dir = unique_dir("eqexport-typst-svg-bin");
+        let typst = fixture_dir.join("typst");
+        write_executable(
+            &typst,
+            "#!/bin/sh\n[ \"$3\" = \"equation.svg\" ] || exit 14\ngrep -q 'fill: none' equation.typ || exit 13\nprintf '<svg />' > equation.svg\n",
+        );
+        let output_dir = unique_dir("eqexport-typst-svg-output");
+
+        render_typst_with_command("x", OutputFormat::Svg, &output_dir, &typst).unwrap();
+
         assert_eq!(
             fs::read_to_string(output_dir.join("equation.svg")).unwrap(),
-            "equation.svg"
+            "<svg />"
         );
+        assert!(!output_dir.join("equation.pdf").exists());
     }
 
     #[test]
@@ -163,11 +145,16 @@ printf '%s' "$3" > "$3"
             return;
         }
 
-        let output_dir =
-            super::render_typst("integral_0^infinity e^(-x^2) dif x = sqrt(pi) / 2").unwrap();
+        let output_dir = unique_dir("eqexport-typst-real-output");
+        super::render_typst(
+            "integral_0^infinity e^(-x^2) dif x = sqrt(pi) / 2",
+            OutputFormat::Svg,
+            &output_dir,
+        )
+        .unwrap();
 
-        assert!(output_dir.join("equation.pdf").is_file());
         assert!(output_dir.join("equation.svg").is_file());
+        assert!(!output_dir.join("equation.pdf").exists());
     }
 
     fn unique_dir(prefix: &str) -> PathBuf {
