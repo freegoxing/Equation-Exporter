@@ -5,6 +5,11 @@ on:
     tags:
       - "v*"
   workflow_dispatch:
+    inputs:
+      release_tag:
+        description: Existing tag to build and publish
+        required: true
+        type: string
 
 permissions:
   contents: write
@@ -32,10 +37,12 @@ jobs:
 
     steps:
       - uses: actions/checkout@v4
+        with:
+          ref: ${{ inputs.release_tag || github.ref }}
 
       - uses: pnpm/action-setup@v4
         with:
-          version: 11.24.0
+          version: 12.4.1
 
       - uses: actions/setup-node@v4
         with:
@@ -62,8 +69,8 @@ jobs:
         with:
           # Run the CLI from the repository root, which contains src-tauri/.
           tauriScript: frontend/node_modules/.bin/tauri
-          tagName: ${{ github.ref_name }}
-          releaseName: Equation Exporter ${{ github.ref_name }}
+          tagName: ${{ inputs.release_tag || github.ref_name }}
+          releaseName: Equation Exporter ${{ inputs.release_tag || github.ref_name }}
           generateReleaseNotes: true
           releaseDraft: false
           prerelease: false
