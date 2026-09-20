@@ -1,7 +1,7 @@
 #[cfg(not(target_os = "linux"))]
 use clipboard_rs::{Clipboard, ClipboardContext};
-use equation_exporter::commands::{Backend, OutputFormat, RenderedArtifact, export_equation};
 use equation_exporter::error::{AppError, AppResult};
+use equation_exporter::export::{Backend, OutputFormat, RenderedArtifact, export_equation};
 use std::{
     fs,
     path::{Path, PathBuf},

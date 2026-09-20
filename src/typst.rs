@@ -1,6 +1,6 @@
 use crate::{
-    commands::OutputFormat,
     error::{AppError, AppResult},
+    export::OutputFormat,
 };
 use std::{fs, path::Path, process::Command};
 
@@ -70,7 +70,7 @@ fn ensure_output_exists(output_dir: &Path, filename: &str) -> AppResult<()> {
 #[cfg(test)]
 mod tests {
     use super::{build_typst_source, render_typst_with_command};
-    use crate::commands::OutputFormat;
+    use crate::export::OutputFormat;
     use std::{
         env, fs,
         os::unix::fs::PermissionsExt,

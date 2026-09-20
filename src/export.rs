@@ -1,9 +1,14 @@
-use crate::app::{latex::render_latex, typst::render_typst};
 use crate::error::AppResult;
+use crate::{latex::render_latex, typst::render_typst};
 use std::path::{Path, PathBuf};
 use tempfile::{Builder, TempDir};
 
-pub use crate::app::backend::Backend;
+#[derive(Clone, Copy, Debug, serde::Deserialize)]
+#[serde(rename_all = "lowercase")]
+pub enum Backend {
+    Latex,
+    Typst,
+}
 
 #[derive(Clone, Copy, Debug, serde::Deserialize)]
 #[serde(rename_all = "lowercase")]
@@ -54,8 +59,20 @@ pub fn export_equation(
 
 #[cfg(test)]
 mod tests {
-    use super::{OutputFormat, RenderedArtifact, artifact_path};
+    use super::{Backend, OutputFormat, RenderedArtifact, artifact_path};
     use std::path::Path;
+
+    #[test]
+    fn backend_deserializes_tauri_request_names() {
+        assert!(matches!(
+            serde_json::from_str::<Backend>(r#""latex""#).unwrap(),
+            Backend::Latex
+        ));
+        assert!(matches!(
+            serde_json::from_str::<Backend>(r#""typst""#).unwrap(),
+            Backend::Typst
+        ));
+    }
 
     #[test]
     fn output_format_selects_the_requested_filename() {

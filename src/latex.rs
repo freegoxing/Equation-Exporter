@@ -1,6 +1,6 @@
 use crate::{
-    commands::OutputFormat,
     error::{AppError, AppResult},
+    export::OutputFormat,
 };
 use std::{fs, path::Path, process::Command};
 
@@ -99,8 +99,8 @@ fn ensure_output_exists(output_dir: &Path, filename: &str, program: &'static str
 #[cfg(test)]
 mod tests {
     use super::render_latex_with_commands;
-    use crate::commands::OutputFormat;
     use crate::error::AppError;
+    use crate::export::OutputFormat;
     use std::{
         env, fs,
         os::unix::fs::PermissionsExt,
