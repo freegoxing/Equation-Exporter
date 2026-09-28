@@ -10,7 +10,7 @@ export function clampPreviewZoom(percent: number): number {
 }
 
 export function previewScale(backend: Backend, percent: number): string {
-  const base = backend === "typst" ? 1.6 : 1;
+  const base = backend === "typst" ? 2 : 1.25;
   return String((base * clampPreviewZoom(percent)) / 100);
 }
 

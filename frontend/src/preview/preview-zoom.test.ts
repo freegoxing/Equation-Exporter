@@ -8,10 +8,11 @@ test("bounds preview zoom to the supported range", () => {
   expect(clampPreviewZoom(230)).toBe(200);
 });
 
-test("applies the Typst baseline before the user zoom", () => {
-  expect(previewScale("latex", 100)).toBe("1");
-  expect(previewScale("typst", 100)).toBe("1.6");
-  expect(previewScale("typst", 150)).toBe("2.4");
+test("applies each backend baseline before the user zoom", () => {
+  expect(previewScale("latex", 100)).toBe("1.25");
+  expect(previewScale("latex", 200)).toBe("2.5");
+  expect(previewScale("typst", 100)).toBe("2");
+  expect(previewScale("typst", 150)).toBe("3");
 });
 
 test("formats a zoom percentage for the preview toolbar", () => {
