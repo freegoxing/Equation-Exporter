@@ -18,3 +18,8 @@ test("styles preview-engine controls in the preview toolbar", () => {
 test("uses one error-card style for all preview engines", () => {
   expect(stylesheet).toMatch(/#preview\.preview-error\s*\{[^}]*align-content:\s*start[^}]*justify-items:\s*start[^}]*background:\s*#fef2f2/s);
 });
+
+test("keeps the completion list hidden until the combobox opens it", () => {
+  expect(stylesheet).toMatch(/\.completions\[hidden\]\s*\{[^}]*display:\s*none/s);
+  expect(stylesheet).toMatch(/\.completion-item\[aria-selected="true"\]/s);
+});

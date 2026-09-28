@@ -20,6 +20,14 @@ import {
 import { inputPlaceholder } from "../editor/input-placeholder";
 import { createTextHistory } from "../editor/text-history";
 import {
+  applyCompletion,
+  findCompletions,
+  rebaseRanges,
+  type CompletionMatch,
+  type TextRange,
+} from "../editor/completion";
+import { createCompletionPreviewCache } from "../editor/completion-preview";
+import {
   errorPresentation,
   normalizeExportError,
   type DependencyHelp,
@@ -42,6 +50,8 @@ import {
 import { renderTypstPreview } from "../preview/typst-preview";
 
 const sourceElement = document.querySelector<HTMLTextAreaElement>("#source");
+const editorPaneElement = document.querySelector<HTMLElement>(".editor-pane");
+const completionsElement = document.querySelector<HTMLDivElement>("#completions");
 const backendElement = document.querySelector<HTMLSelectElement>("#backend");
 const previewElement = document.querySelector<HTMLElement>("#preview");
 const previewZoomOutElement = document.querySelector<HTMLButtonElement>("#preview-zoom-out");
@@ -62,6 +72,8 @@ const copyOutputElement = document.querySelector<HTMLSelectElement>("#copy-outpu
 
 if (
   !sourceElement ||
+  !editorPaneElement ||
+  !completionsElement ||
   !backendElement ||
   !previewElement ||
   !previewZoomOutElement ||
@@ -84,6 +96,8 @@ if (
 }
 
 const source = sourceElement;
+const editorPane = editorPaneElement;
+const completions = completionsElement;
 const backend = backendElement;
 const preview = previewElement;
 const previewZoomOut = previewZoomOutElement;
@@ -105,6 +119,172 @@ const exportControls = [saveEquationButton, copyEquationButton, saveOutput, copy
 const sourceHistory = createTextHistory(source.value);
 let previewRequest = 0;
 let previewZoom = 100;
+let completionMatches: CompletionMatch[] = [];
+let activeCompletion = 0;
+let completionRequest = 0;
+let snippetRanges: TextRange[] = [];
+let pendingInput: { range: TextRange; previousLength: number } | null = null;
+
+const completionPreviewCache = createCompletionPreviewCache({
+  latex: (value) => renderLatexPreview(value, "katex"),
+  typst: renderTypstPreview,
+});
+
+function closeCompletions(): void {
+  completionRequest += 1;
+  completionMatches = [];
+  completions.hidden = true;
+  completions.replaceChildren();
+  source.setAttribute("aria-expanded", "false");
+  source.removeAttribute("aria-activedescendant");
+}
+
+function setActiveCompletion(index: number): void {
+  if (completionMatches.length === 0) return;
+  activeCompletion = (index + completionMatches.length) % completionMatches.length;
+  Array.from(completions.children).forEach((node, optionIndex) => {
+    node.setAttribute("aria-selected", String(optionIndex === activeCompletion));
+  });
+  const active = completions.children[activeCompletion] as HTMLElement | undefined;
+  if (active) {
+    source.setAttribute("aria-activedescendant", active.id);
+    active.scrollIntoView({ block: "nearest" });
+  }
+}
+
+function caretCoordinates(): { left: number; top: number; lineHeight: number } {
+  const sourceStyle = getComputedStyle(source);
+  const sourceRect = source.getBoundingClientRect();
+  const paneRect = editorPane.getBoundingClientRect();
+  const mirror = document.createElement("div");
+  const copiedProperties = [
+    "box-sizing", "width", "height", "padding-top", "padding-right", "padding-bottom", "padding-left",
+    "border-top-width", "border-right-width", "border-bottom-width", "border-left-width",
+    "font-family", "font-size", "font-style", "font-weight", "letter-spacing", "line-height",
+    "text-align", "text-indent", "text-transform", "word-spacing", "tab-size",
+  ];
+  copiedProperties.forEach((property) => mirror.style.setProperty(property, sourceStyle.getPropertyValue(property)));
+  Object.assign(mirror.style, {
+    position: "fixed",
+    visibility: "hidden",
+    overflow: "hidden",
+    whiteSpace: "pre-wrap",
+    overflowWrap: "break-word",
+    top: `${sourceRect.top}px`,
+    left: `${sourceRect.left}px`,
+  });
+  const marker = document.createElement("span");
+  marker.textContent = "\u200b";
+  mirror.append(document.createTextNode(source.value.slice(0, source.selectionStart)), marker);
+  document.body.append(mirror);
+  mirror.scrollTop = source.scrollTop;
+  mirror.scrollLeft = source.scrollLeft;
+  const markerRect = marker.getBoundingClientRect();
+  mirror.remove();
+  const lineHeight = Number.parseFloat(sourceStyle.lineHeight) || Number.parseFloat(sourceStyle.fontSize) * 1.2 || 20;
+  return {
+    left: markerRect.left - paneRect.left,
+    top: markerRect.top - paneRect.top,
+    lineHeight,
+  };
+}
+
+function positionCompletionPopup(): void {
+  if (completions.hidden) return;
+  const caret = caretCoordinates();
+  const maxLeft = Math.max(0, editorPane.clientWidth - completions.offsetWidth);
+  const below = caret.top + caret.lineHeight + 4;
+  const above = caret.top - completions.offsetHeight - 4;
+  const top = below + completions.offsetHeight <= editorPane.clientHeight ? below : Math.max(0, above);
+  completions.style.left = `${Math.min(Math.max(0, caret.left), maxLeft)}px`;
+  completions.style.top = `${top}px`;
+}
+
+function renderCompletionOption(match: CompletionMatch, index: number, request: number): HTMLElement {
+  const option = document.createElement("div");
+  option.id = `completion-option-${request}-${index}`;
+  option.className = "completion-item";
+  option.setAttribute("role", "option");
+  option.setAttribute("aria-selected", String(index === activeCompletion));
+
+  const label = document.createElement("span");
+  label.className = "completion-label";
+  label.textContent = match.completion.backend === "latex" ? `\\${match.completion.name}` : match.completion.name;
+
+  const detail = document.createElement("span");
+  detail.className = "completion-detail";
+  const previewNode = document.createElement("span");
+  previewNode.className = "completion-preview";
+  previewNode.textContent = "…";
+  const signature = document.createElement("span");
+  signature.className = "completion-signature";
+  signature.textContent = match.completion.signature ?? match.completion.display;
+  detail.append(previewNode, signature);
+  option.append(label, detail);
+
+  option.addEventListener("mousedown", (event) => event.preventDefault());
+  option.addEventListener("mousemove", () => setActiveCompletion(index));
+  option.addEventListener("click", () => acceptCompletion(index));
+
+  void completionPreviewCache.render(match.completion.backend, match.completion.preview).then((html) => {
+    if (request !== completionRequest || !previewNode.isConnected) return;
+    if (html) previewNode.innerHTML = html;
+    else previewNode.textContent = match.completion.preview;
+  });
+  return option;
+}
+
+function showCompletions(): void {
+  const matches = findCompletions(
+    backend.value as Backend,
+    source.value,
+    source.selectionEnd,
+    source.selectionStart,
+    source.selectionEnd,
+  );
+  if (matches.length === 0 || document.activeElement !== source) {
+    closeCompletions();
+    return;
+  }
+
+  const request = ++completionRequest;
+  completionMatches = matches;
+  activeCompletion = 0;
+  completions.replaceChildren(...matches.map((match, index) => renderCompletionOption(match, index, request)));
+  completions.hidden = false;
+  source.setAttribute("aria-expanded", "true");
+  setActiveCompletion(0);
+  positionCompletionPopup();
+}
+
+function acceptCompletion(index: number): void {
+  const selected = completionMatches[index];
+  if (!selected) return;
+  const current = findCompletions(
+    backend.value as Backend,
+    source.value,
+    source.selectionEnd,
+    source.selectionStart,
+    source.selectionEnd,
+  ).find(({ completion }) => completion.name === selected.completion.name);
+  if (!current) {
+    closeCompletions();
+    return;
+  }
+
+  const suffixLength = source.value.length - current.range.end;
+  const result = applyCompletion(source.value, current);
+  source.value = result.value;
+  const caret = result.value.length - suffixLength;
+  const selection = result.selection ?? { start: caret, end: caret };
+  source.setSelectionRange(selection.start, selection.end);
+  snippetRanges = result.finalCaret ? [...result.placeholders, result.finalCaret] : [];
+  pendingInput = null;
+  sourceHistory.record(source.value);
+  closeCompletions();
+  updatePreview();
+  source.focus();
+}
 
 function applyPreviewScale(): void {
   preview.style.setProperty("--preview-scale", previewScale(backend.value as Backend, previewZoom));
@@ -150,6 +330,9 @@ function applyHistoryValue(value: string | undefined): void {
   }
 
   source.value = value;
+  snippetRanges = [];
+  pendingInput = null;
+  closeCompletions();
   updatePreview();
 }
 
@@ -277,11 +460,41 @@ function syncCopyOutput(backend: Backend): void {
   copyOutput.value = selectedCopyFormatForBackend(backend, selected);
 }
 
+source.addEventListener("beforeinput", () => {
+  pendingInput = {
+    range: { start: source.selectionStart, end: source.selectionEnd },
+    previousLength: source.value.length,
+  };
+});
 source.addEventListener("input", () => {
+  if (pendingInput && snippetRanges.length > 0) {
+    const removedLength = pendingInput.range.end - pendingInput.range.start;
+    const insertedLength = source.value.length - (pendingInput.previousLength - removedLength);
+    snippetRanges = rebaseRanges(snippetRanges, pendingInput.range, insertedLength) ?? [];
+  } else if (!pendingInput) {
+    snippetRanges = [];
+  }
+  pendingInput = null;
   sourceHistory.record(source.value);
   updatePreview();
+  showCompletions();
 });
 source.addEventListener("keydown", (event) => {
+  if (completionMatches.length > 0 && ["ArrowDown", "ArrowUp", "Enter", "Tab", "Escape"].includes(event.key)) {
+    event.preventDefault();
+    if (event.key === "Escape") closeCompletions();
+    else if (event.key === "Enter" || event.key === "Tab") acceptCompletion(activeCompletion);
+    else setActiveCompletion(activeCompletion + (event.key === "ArrowDown" ? 1 : -1));
+    return;
+  }
+  if (event.key === "Tab" && snippetRanges.length > 0) {
+    event.preventDefault();
+    const [next, ...remaining] = snippetRanges;
+    snippetRanges = remaining;
+    source.setSelectionRange(next.start, next.end);
+    closeCompletions();
+    return;
+  }
   if (!event.ctrlKey && !event.metaKey) {
     return;
   }
@@ -294,7 +507,22 @@ source.addEventListener("keydown", (event) => {
     applyHistoryValue(sourceHistory.redo());
   }
 });
+source.addEventListener("keyup", (event) => {
+  if (["ArrowLeft", "ArrowRight", "Home", "End", "PageUp", "PageDown"].includes(event.key)) {
+    showCompletions();
+  }
+});
+source.addEventListener("select", showCompletions);
+source.addEventListener("click", showCompletions);
+source.addEventListener("scroll", positionCompletionPopup);
+source.addEventListener("blur", closeCompletions);
+editorPane.addEventListener("click", (event) => {
+  if (event.target === editorPane) source.focus();
+});
 backend.addEventListener("change", () => {
+  snippetRanges = [];
+  pendingInput = null;
+  closeCompletions();
   syncCopyOutput(backend.value as Backend);
   applyInputPlaceholder();
   applyPreviewEngine();

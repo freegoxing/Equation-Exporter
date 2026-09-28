@@ -40,10 +40,11 @@
       </header>
 
       <section class="workspace">
-        <label class="pane editor-pane" for="source">
-          <span class="pane-title">公式输入</span>
-          <textarea id="source" spellcheck="false" placeholder="例如：\frac{a}{b}"></textarea>
-        </label>
+        <div class="pane editor-pane">
+          <label class="pane-title" for="source">公式输入</label>
+          <textarea id="source" role="combobox" aria-autocomplete="list" aria-controls="completions" aria-expanded="false" spellcheck="false" placeholder="例如：\frac{a}{b}"></textarea>
+          <div id="completions" class="completions" role="listbox" aria-label="公式命令补全" hidden></div>
+        </div>
         <section class="pane preview-pane" aria-labelledby="preview-title">
           <div class="preview-heading">
             <h2 id="preview-title" class="pane-title">预览</h2>
