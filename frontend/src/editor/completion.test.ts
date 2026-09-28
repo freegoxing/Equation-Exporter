@@ -3,7 +3,6 @@ import {
   applyCompletion,
   findCompletions,
   rebaseRanges,
-  type Completion,
   type TextRange,
 } from './completion';
 
@@ -52,40 +51,72 @@ describe('findCompletions', () => {
     expect(findCompletions('latex', 'fra', 3)).toEqual([]);
   });
 
-  it('orders exact matches first, then other prefix matches deterministically, and caps at eight', () => {
-    const matches = findCompletions('latex', '\\s', 2);
+  it('ranks strict prefix results before fuzzy subsequence matches and reports matched character indices', () => {
+    const matches = findCompletions('latex', '\\fra', 4);
 
-    expect(matches.length).toBeLessThanOrEqual(8);
-    expect(matches[0].completion.name).toBe('sqrt');
-    expect(matches.map(({ completion }) => completion.name)).toEqual(
-      [...matches.map(({ completion }) => completion.name)].sort((a, b) => {
-        const exactOrder = Number(a !== 's') - Number(b !== 's');
-        return exactOrder || a.localeCompare(b);
-      }),
-    );
+    expect(matches[0]).toMatchObject({
+      completion: { name: 'frac' },
+      matchKind: 'prefix',
+      matchedIndices: [0, 1, 2],
+    });
+    expect(matches.find(({ completion }) => completion.name === 'cfrac')).toMatchObject({ matchKind: 'fuzzy', matchedIndices: [1, 2, 3] });
+    expect(matches.find(({ completion }) => completion.name === 'dfrac')).toMatchObject({ matchKind: 'fuzzy', matchedIndices: [1, 2, 3] });
+  });
+
+  it('ranks exact and prefix matches before fuzzy results, retaining curated order within those classes', () => {
+    const exact = findCompletions('latex', '\\mu', 3);
+    const matches = findCompletions('latex', '\\m', 2);
+
+    expect(exact[0]).toMatchObject({ completion: { name: 'mu' }, matchKind: 'exact', matchedIndices: [0, 1] });
+    expect(matches.slice(0, 3).map(({ completion }) => completion.name)).toEqual(['mu', 'mp', 'mapsto']);
+    expect(findCompletions('latex', '\\Mu', 3)).toEqual([]);
+  });
+
+  it('returns no more than thirty candidates', () => {
+    expect(findCompletions('latex', '\\a', 2).length).toBeLessThanOrEqual(30);
+  });
+
+  it('includes a broad curated command and Typst symbol catalog', () => {
+    const latex = findCompletions('latex', '\\m', 2);
+    expect(latex.map(({ completion }) => completion.name)).toEqual(expect.arrayContaining([
+      'mapsto', 'mathbb', 'mathrm', 'mathbf', 'mathcal', 'mathfrak', 'matrix', 'mu', 'mp',
+    ]));
+    expect(findCompletions('typst', 'arrow.', 6).map(({ completion }) => completion.name)).toContain('arrow.r');
   });
 });
 
 describe('applyCompletion', () => {
-  it('inserts structural snippets and returns explicit placeholder ranges', () => {
-    const completion: Completion = {
-      backend: 'latex',
-      name: 'frac',
-      display: 'fraction',
-      preview: '\\frac{a}{b}',
-      parts: ['\\frac{', { placeholder: 'numerator' }, '}{', { placeholder: 'denominator' }, '}'],
-    };
-    const match = {
-      completion,
-      query: 'fra',
-      range: { start: 2, end: 6 } satisfies TextRange,
-    };
+  it('inserts structural snippets with empty slots and zero-width tab stops', () => {
+    const match = findCompletions('latex', 'x \\fra y', 6).find(({ completion }) => completion.name === 'frac')!;
 
     expect(applyCompletion('x \\fra y', match)).toEqual({
-      value: 'x \\frac{numerator}{denominator} y',
-      selection: { start: 8, end: 17 },
-      placeholders: [{ start: 19, end: 30 }],
-      finalCaret: { start: 31, end: 31 },
+      value: 'x \\frac{}{} y',
+      selection: { start: 8, end: 8 },
+      placeholders: [{ start: 10, end: 10 }],
+      finalCaret: { start: 11, end: 11 },
+    });
+  });
+
+  it('adds a trailing terminator space to atomic LaTeX commands', () => {
+    const [match] = findCompletions('latex', '\\alp', 4);
+    expect(applyCompletion('\\alp', match)).toMatchObject({ value: '\\alpha ', selection: null, finalCaret: null });
+  });
+
+  it('inserts a LaTeX square root with an empty selected slot and trailing terminator', () => {
+    const [match] = findCompletions('latex', '\\sqrt', 5).filter(({ completion }) => completion.name === 'sqrt');
+    expect(applyCompletion('\\sqrt', match)).toMatchObject({
+      value: '\\sqrt{} ',
+      selection: { start: 6, end: 6 },
+      finalCaret: { start: 8, end: 8 },
+    });
+  });
+
+  it('inserts Typst structures using empty valid argument slots', () => {
+    const [match] = findCompletions('typst', 'frac', 4);
+    expect(applyCompletion('frac', match)).toMatchObject({
+      value: 'frac(, )',
+      selection: { start: 5, end: 5 },
+      placeholders: [{ start: 7, end: 7 }],
     });
   });
 });

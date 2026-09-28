@@ -209,28 +209,49 @@ function renderCompletionOption(match: CompletionMatch, index: number, request: 
 
   const label = document.createElement("span");
   label.className = "completion-label";
-  label.textContent = match.completion.backend === "latex" ? `\\${match.completion.name}` : match.completion.name;
+  if (match.completion.backend === "latex") label.append("\\");
+  const matchedIndices = new Set(match.matchedIndices);
+  Array.from(match.completion.name).forEach((character, characterIndex) => {
+    if (!matchedIndices.has(characterIndex)) {
+      label.append(character);
+      return;
+    }
+    const matched = document.createElement("mark");
+    matched.className = "completion-match";
+    matched.textContent = character;
+    label.append(matched);
+  });
 
   const detail = document.createElement("span");
   detail.className = "completion-detail";
   const previewNode = document.createElement("span");
   previewNode.className = "completion-preview";
-  previewNode.textContent = "…";
-  const signature = document.createElement("span");
-  signature.className = "completion-signature";
-  signature.textContent = match.completion.signature ?? match.completion.display;
-  detail.append(previewNode, signature);
+  detail.append(previewNode);
+  if (match.completion.signature) {
+    const signature = document.createElement("span");
+    signature.className = "completion-signature";
+    signature.textContent = match.completion.signature;
+    detail.append(signature);
+  }
   option.append(label, detail);
+  option.setAttribute("aria-label", `${label.textContent} ${match.completion.display}`);
 
   option.addEventListener("mousedown", (event) => event.preventDefault());
   option.addEventListener("mousemove", () => setActiveCompletion(index));
   option.addEventListener("click", () => acceptCompletion(index));
 
-  void completionPreviewCache.render(match.completion.backend, match.completion.preview).then((html) => {
-    if (request !== completionRequest || !previewNode.isConnected) return;
-    if (html) previewNode.innerHTML = html;
-    else previewNode.textContent = match.completion.preview;
-  });
+  if (match.completion.symbol) {
+    previewNode.textContent = match.completion.symbol;
+  } else if (match.completion.signature) {
+    previewNode.textContent = "…";
+    void completionPreviewCache.render(match.completion.backend, match.completion.preview).then((html) => {
+      if (request !== completionRequest || !previewNode.isConnected) return;
+      if (html) previewNode.innerHTML = html;
+      else previewNode.textContent = match.completion.preview;
+    });
+  } else {
+    previewNode.remove();
+  }
   return option;
 }
 

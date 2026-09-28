@@ -20,3 +20,14 @@ test("provides a labelled completion listbox next to the source", () => {
 test("recomputes completions when only the textarea selection changes", () => {
   expect(script).toContain('source.addEventListener("select", showCompletions);');
 });
+
+test("highlights the characters that matched a completion query", () => {
+  expect(script).toContain("match.matchedIndices");
+  expect(script).toContain('document.createElement("mark")');
+  expect(script).toContain('matched.className = "completion-match"');
+});
+
+test("uses immediate symbols before requesting an async formula preview", () => {
+  expect(script).toContain("match.completion.symbol");
+  expect(script).toMatch(/if \(match\.completion\.symbol\)[\s\S]*else if \(match\.completion\.signature\)/);
+});

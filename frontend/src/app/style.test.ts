@@ -23,3 +23,9 @@ test("keeps the completion list hidden until the combobox opens it", () => {
   expect(stylesheet).toMatch(/\.completions\[hidden\]\s*\{[^}]*display:\s*none/s);
   expect(stylesheet).toMatch(/\.completion-item\[aria-selected="true"\]/s);
 });
+
+test("keeps completion rows compact and visibly highlights fuzzy matches", () => {
+  expect(stylesheet).toMatch(/\.completion-item\s*\{[^}]*min-height:\s*2\.25rem/s);
+  expect(stylesheet).toMatch(/\.completion-detail\s*\{[^}]*flex-direction:\s*row/s);
+  expect(stylesheet).toMatch(/\.completion-match\s*\{[^}]*background:\s*transparent/s);
+});

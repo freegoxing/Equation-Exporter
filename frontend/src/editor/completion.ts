@@ -9,6 +9,7 @@ export type Completion = {
   name: string;
   display: string;
   preview: string;
+  symbol?: string;
   signature?: string;
   parts: SnippetPart[];
 };
@@ -17,6 +18,8 @@ export type CompletionMatch = {
   completion: Completion;
   query: string;
   range: TextRange;
+  matchedIndices: number[];
+  matchKind: 'exact' | 'prefix' | 'fuzzy';
 };
 
 export type AppliedCompletion = {
@@ -26,50 +29,155 @@ export type AppliedCompletion = {
   finalCaret: TextRange | null;
 };
 
+const latexAtomic = (name: string, display: string, symbol: string, preview = `\\${name}`): Completion => ({
+  backend: 'latex', name, display, symbol, preview, parts: [`\\${name} `],
+});
+const latexStructure = (
+  name: string,
+  display: string,
+  preview: string,
+  signature: string,
+  parts: SnippetPart[],
+): Completion => {
+  const terminatedParts = [...parts];
+  const last = terminatedParts[terminatedParts.length - 1];
+  if (typeof last === 'string') terminatedParts[terminatedParts.length - 1] = `${last} `;
+  else terminatedParts.push(' ');
+  return { backend: 'latex', name, display, preview, signature, parts: terminatedParts };
+};
+const slot = (): { placeholder: string } => ({ placeholder: '' });
+
+// Order is intentional: familiar commands such as mu and mp stay prominent.
 const latexCompletions: Completion[] = [
-  { backend: 'latex', name: 'alpha', display: 'α alpha', preview: '\\alpha', parts: ['\\alpha'] },
-  { backend: 'latex', name: 'approx', display: '≈ approximate', preview: '\\approx', parts: ['\\approx'] },
-  { backend: 'latex', name: 'beta', display: 'β beta', preview: '\\beta', parts: ['\\beta'] },
-  { backend: 'latex', name: 'cdot', display: '⋅ centered dot', preview: 'a\\cdot b', parts: ['\\cdot'] },
-  { backend: 'latex', name: 'frac', display: 'fraction', preview: '\\frac{a}{b}', signature: '\\frac{numerator}{denominator}', parts: ['\\frac{', { placeholder: 'numerator' }, '}{', { placeholder: 'denominator' }, '}'] },
-  { backend: 'latex', name: 'gamma', display: 'γ gamma', preview: '\\gamma', parts: ['\\gamma'] },
-  { backend: 'latex', name: 'infty', display: '∞ infinity', preview: '\\infty', parts: ['\\infty'] },
-  { backend: 'latex', name: 'int', display: '∫ integral', preview: '\\int_a^b f(x)\\,dx', signature: '\\int_{lower}^{upper} integrand', parts: ['\\int_{', { placeholder: 'lower bound' }, '}^{', { placeholder: 'upper bound' }, '} ', { placeholder: 'integrand' }] },
-  { backend: 'latex', name: 'leq', display: '≤ less than or equal', preview: 'a\\leq b', parts: ['\\leq'] },
-  { backend: 'latex', name: 'mapsto', display: '↦ maps to', preview: 'a\\mapsto b', parts: ['\\mapsto'] },
-  { backend: 'latex', name: 'mathbb', display: 'blackboard bold', preview: '\\mathbb{R}', signature: '\\mathbb{symbol}', parts: ['\\mathbb{', { placeholder: 'symbol' }, '}'] },
-  { backend: 'latex', name: 'matrix', display: '2 × 2 matrix', preview: '\\begin{matrix}a & b \\\\ c & d\\end{matrix}', signature: '\\begin{matrix}…\\end{matrix}', parts: ['\\begin{matrix}', { placeholder: 'a' }, ' & ', { placeholder: 'b' }, ' \\\\ ', { placeholder: 'c' }, ' & ', { placeholder: 'd' }, '\\end{matrix}'] },
-  { backend: 'latex', name: 'mp', display: '∓ minus-or-plus', preview: '\\mp', parts: ['\\mp'] },
-  { backend: 'latex', name: 'mu', display: 'μ mu', preview: '\\mu', parts: ['\\mu'] },
-  { backend: 'latex', name: 'neq', display: '≠ not equal', preview: 'a\\neq b', parts: ['\\neq'] },
-  { backend: 'latex', name: 'pi', display: 'π pi', preview: '\\pi', parts: ['\\pi'] },
-  { backend: 'latex', name: 'rightarrow', display: '→ right arrow', preview: 'a\\rightarrow b', parts: ['\\rightarrow'] },
-  { backend: 'latex', name: 'sqrt', display: 'square root', preview: '\\sqrt{x}', signature: '\\sqrt{radicand}', parts: ['\\sqrt{', { placeholder: 'radicand' }, '}'] },
-  { backend: 'latex', name: 'sum', display: '∑ summation', preview: '\\sum_{i=1}^{n} i', signature: '\\sum_{lower}^{upper} term', parts: ['\\sum_{', { placeholder: 'lower bound' }, '}^{', { placeholder: 'upper bound' }, '} ', { placeholder: 'term' }] },
-  { backend: 'latex', name: 'times', display: '× times', preview: 'a\\times b', parts: ['\\times'] },
-  { backend: 'latex', name: 'theta', display: 'θ theta', preview: '\\theta', parts: ['\\theta'] },
+  latexAtomic('mu', 'μ mu', 'μ'),
+  latexAtomic('mp', '∓ minus-or-plus', '∓'),
+  latexAtomic('mapsto', '↦ maps to', '↦', 'a\\mapsto b'),
+  latexStructure('mathbb', 'blackboard bold', '\\mathbb{R}', '\\mathbb{symbol}', ['\\mathbb{', slot(), '}']),
+  latexStructure('mathrm', 'roman font', '\\mathrm{d}x', '\\mathrm{symbol}', ['\\mathrm{', slot(), '}']),
+  latexStructure('mathbf', 'bold font', '\\mathbf{x}', '\\mathbf{symbol}', ['\\mathbf{', slot(), '}']),
+  latexStructure('mathcal', 'calligraphic font', '\\mathcal{F}', '\\mathcal{symbol}', ['\\mathcal{', slot(), '}']),
+  latexStructure('mathfrak', 'Fraktur font', '\\mathfrak{g}', '\\mathfrak{symbol}', ['\\mathfrak{', slot(), '}']),
+  latexStructure('matrix', '2 × 2 matrix', '\\begin{matrix}a & b \\\\ c & d\\end{matrix}', '\\begin{matrix}…\\end{matrix}', ['\\begin{matrix}', slot(), ' & ', slot(), ' \\\\ ', slot(), ' & ', slot(), '\\end{matrix}']),
+  latexAtomic('alpha', 'α alpha', 'α'),
+  latexAtomic('beta', 'β beta', 'β'),
+  latexAtomic('gamma', 'γ gamma', 'γ'),
+  latexAtomic('delta', 'δ delta', 'δ'),
+  latexAtomic('epsilon', 'ε epsilon', 'ε'),
+  latexAtomic('varepsilon', 'ϵ variant epsilon', 'ϵ'),
+  latexAtomic('zeta', 'ζ zeta', 'ζ'),
+  latexAtomic('eta', 'η eta', 'η'),
+  latexAtomic('theta', 'θ theta', 'θ'),
+  latexAtomic('vartheta', 'ϑ variant theta', 'ϑ'),
+  latexAtomic('iota', 'ι iota', 'ι'),
+  latexAtomic('kappa', 'κ kappa', 'κ'),
+  latexAtomic('lambda', 'λ lambda', 'λ'),
+  latexAtomic('nu', 'ν nu', 'ν'),
+  latexAtomic('xi', 'ξ xi', 'ξ'),
+  latexAtomic('pi', 'π pi', 'π'),
+  latexAtomic('varpi', 'ϖ variant pi', 'ϖ'),
+  latexAtomic('rho', 'ρ rho', 'ρ'),
+  latexAtomic('sigma', 'σ sigma', 'σ'),
+  latexAtomic('tau', 'τ tau', 'τ'),
+  latexAtomic('upsilon', 'υ upsilon', 'υ'),
+  latexAtomic('phi', 'ϕ phi', 'ϕ'),
+  latexAtomic('varphi', 'φ variant phi', 'φ'),
+  latexAtomic('chi', 'χ chi', 'χ'),
+  latexAtomic('psi', 'ψ psi', 'ψ'),
+  latexAtomic('omega', 'ω omega', 'ω'),
+  latexAtomic('Gamma', 'Γ capital gamma', 'Γ'),
+  latexAtomic('Delta', 'Δ capital delta', 'Δ'),
+  latexAtomic('Theta', 'Θ capital theta', 'Θ'),
+  latexAtomic('Lambda', 'Λ capital lambda', 'Λ'),
+  latexAtomic('Xi', 'Ξ capital xi', 'Ξ'),
+  latexAtomic('Pi', 'Π capital pi', 'Π'),
+  latexAtomic('Sigma', 'Σ capital sigma', 'Σ'),
+  latexAtomic('Phi', 'Φ capital phi', 'Φ'),
+  latexAtomic('Psi', 'Ψ capital psi', 'Ψ'),
+  latexAtomic('Omega', 'Ω capital omega', 'Ω'),
+  latexAtomic('approx', '≈ approximately equal', '≈', 'a\\approx b'),
+  latexAtomic('neq', '≠ not equal', '≠', 'a\\neq b'),
+  latexAtomic('leq', '≤ less than or equal', '≤', 'a\\leq b'),
+  latexAtomic('geq', '≥ greater than or equal', '≥', 'a\\geq b'),
+  latexAtomic('in', '∈ element of', '∈', 'x\\in A'),
+  latexAtomic('notin', '∉ not an element of', '∉', 'x\\notin A'),
+  latexAtomic('subset', '⊂ subset', '⊂', 'A\\subset B'),
+  latexAtomic('subseteq', '⊆ subset or equal', '⊆', 'A\\subseteq B'),
+  latexAtomic('cdot', '⋅ centered dot', '⋅', 'a\\cdot b'),
+  latexAtomic('times', '× times', '×', 'a\\times b'),
+  latexAtomic('pm', '± plus-or-minus', '±'),
+  latexAtomic('rightarrow', '→ right arrow', '→', 'a\\rightarrow b'),
+  latexAtomic('leftarrow', '← left arrow', '←', 'a\\leftarrow b'),
+  latexAtomic('leftrightarrow', '↔ left-right arrow', '↔', 'a\\leftrightarrow b'),
+  latexAtomic('Rightarrow', '⇒ double right arrow', '⇒', 'A\\Rightarrow B'),
+  latexAtomic('to', '→ arrow', '→', 'a\\to b'),
+  latexAtomic('infty', '∞ infinity', '∞'),
+  latexAtomic('partial', '∂ partial derivative', '∂'),
+  latexAtomic('nabla', '∇ nabla', '∇'),
+  latexAtomic('prod', '∏ product', '∏'),
+  latexAtomic('lim', 'lim limit', 'lim', '\\lim_{x\\to 0} f(x)'),
+  latexStructure('frac', 'fraction', '\\frac{a}{b}', '\\frac{a}{b}', ['\\frac{', slot(), '}{', slot(), '}']),
+  latexStructure('cfrac', 'continued fraction', '\\cfrac{a}{b}', '\\cfrac{a}{b}', ['\\cfrac{', slot(), '}{', slot(), '}']),
+  latexStructure('dfrac', 'display fraction', '\\dfrac{a}{b}', '\\dfrac{a}{b}', ['\\dfrac{', slot(), '}{', slot(), '}']),
+  latexStructure('sqrt', 'square root', '\\sqrt{x}', '\\sqrt{radicand}', ['\\sqrt{', slot(), '}']),
+  latexStructure('sum', 'summation', '\\sum_{i=1}^{n} i', '\\sum_{lower}^{upper} term', ['\\sum_{', slot(), '}^{', slot(), '} ', slot()]),
+  latexStructure('int', 'integral', '\\int_a^b f(x)\\,dx', '\\int_{lower}^{upper} integrand', ['\\int_{', slot(), '}^{', slot(), '} ', slot()]),
+  latexStructure('cases', 'piecewise cases', '\\begin{cases}x & x>0\\\\0 & x\\leq 0\\end{cases}', '\\begin{cases}…\\end{cases}', ['\\begin{cases}', slot(), ' & ', slot(), ' \\\\ ', slot(), ' & ', slot(), '\\end{cases}']),
 ];
+
+const typstAtomic = (name: string, display: string, symbol: string, preview = name): Completion => ({
+  backend: 'typst', name, display, symbol, preview, parts: [`${name} `],
+});
+const typstStructure = (name: string, display: string, preview: string, signature: string, parts: SnippetPart[]): Completion => ({
+  backend: 'typst', name, display, preview, signature, parts,
+});
 
 const typstCompletions: Completion[] = [
-  { backend: 'typst', name: 'alpha', display: 'α alpha', preview: 'alpha', parts: ['alpha'] },
-  { backend: 'typst', name: 'arrow.r', display: '→ right arrow', preview: 'arrow.r', parts: ['arrow.r'] },
-  { backend: 'typst', name: 'beta', display: 'β beta', preview: 'beta', parts: ['beta'] },
-  { backend: 'typst', name: 'frac', display: 'fraction', preview: 'frac(a, b)', signature: 'frac(numerator, denominator)', parts: ['frac(', { placeholder: 'numerator' }, ', ', { placeholder: 'denominator' }, ')'] },
-  { backend: 'typst', name: 'integral', display: '∫ integral', preview: 'integral_a^b f(x) dif x', signature: 'integral_lower^upper integrand dif variable', parts: ['integral_', { placeholder: 'lower bound' }, ' ^', { placeholder: 'upper bound' }, ' ', { placeholder: 'integrand' }, ' dif ', { placeholder: 'variable' }] },
-  { backend: 'typst', name: 'infinity', display: '∞ infinity', preview: 'infinity', parts: ['infinity'] },
-  { backend: 'typst', name: 'mat', display: '2 × 2 matrix', preview: 'mat(a, b; c, d)', signature: 'mat(a, b; c, d)', parts: ['mat(', { placeholder: 'a' }, ', ', { placeholder: 'b' }, '; ', { placeholder: 'c' }, ', ', { placeholder: 'd' }, ')'] },
-  { backend: 'typst', name: 'mu', display: 'μ mu', preview: 'mu', parts: ['mu'] },
-  { backend: 'typst', name: 'pi', display: 'π pi', preview: 'pi', parts: ['pi'] },
-  { backend: 'typst', name: 'sqrt', display: 'square root', preview: 'sqrt(x)', signature: 'sqrt(radicand)', parts: ['sqrt(', { placeholder: 'radicand' }, ')'] },
-  { backend: 'typst', name: 'sum', display: '∑ summation', preview: 'sum_(i=1)^n i', signature: 'sum_(lower)^upper term', parts: ['sum_(', { placeholder: 'lower bound' }, ')^', { placeholder: 'upper bound' }, ' ', { placeholder: 'term' }] },
-  { backend: 'typst', name: 'theta', display: 'θ theta', preview: 'theta', parts: ['theta'] },
-  { backend: 'typst', name: 'times', display: '× times', preview: 'times', parts: ['times'] },
+  typstAtomic('mu', 'μ mu', 'μ'),
+  typstAtomic('alpha', 'α alpha', 'α'),
+  typstAtomic('beta', 'β beta', 'β'),
+  typstAtomic('gamma', 'γ gamma', 'γ'),
+  typstAtomic('delta', 'δ delta', 'δ'),
+  typstAtomic('epsilon', 'ε epsilon', 'ε'),
+  typstAtomic('theta', 'θ theta', 'θ'),
+  typstAtomic('lambda', 'λ lambda', 'λ'),
+  typstAtomic('pi', 'π pi', 'π'),
+  typstAtomic('sigma', 'σ sigma', 'σ'),
+  typstAtomic('phi', 'ϕ phi', 'ϕ'),
+  typstAtomic('omega', 'ω omega', 'ω'),
+  typstAtomic('infinity', '∞ infinity', '∞'),
+  typstAtomic('times', '× times', '×'),
+  typstAtomic('plus.minus', '± plus-minus', '±'),
+  typstAtomic('equiv', '≡ equivalent', '≡'),
+  typstAtomic('approx', '≈ approximate', '≈'),
+  typstAtomic('arrow.r', '→ right arrow', '→'),
+  typstAtomic('arrow.l', '← left arrow', '←'),
+  typstAtomic('arrow.l.r', '↔ left-right arrow', '↔'),
+  typstAtomic('arrow.r.double', '⇒ double right arrow', '⇒'),
+  typstAtomic('in', '∈ element of', '∈'),
+  typstAtomic('notin', '∉ not an element of', '∉'),
+  typstAtomic('union', '∪ union', '∪'),
+  typstAtomic('inter', '∩ intersection', '∩'),
+  typstStructure('frac', 'fraction', 'frac(a, b)', 'frac(a, b)', ['frac(', slot(), ', ', slot(), ')']),
+  typstStructure('sqrt', 'square root', 'sqrt(x)', 'sqrt(radicand)', ['sqrt(', slot(), ')']),
+  typstStructure('sum', 'summation', 'sum_(i=1)^n i', 'sum_(lower)^upper term', ['sum_(', slot(), ')^', slot(), ' ', slot()]),
+  typstStructure('integral', 'integral', 'integral_a^b f(x) dif x', 'integral_lower^upper integrand', ['integral_(', slot(), ')^', slot(), ' ', slot(), ' dif x']),
+  typstStructure('mat', 'matrix', 'mat(a, b; c, d)', 'mat(a, b; c, d)', ['mat(', slot(), ', ', slot(), '; ', slot(), ', ', slot(), ')']),
+  typstStructure('cases', 'piecewise cases', 'cases(x, x > 0; 0, x <= 0)', 'cases(value, condition; …)', ['cases(', slot(), ', ', slot(), '; ', slot(), ', ', slot(), ')']),
 ];
 
-const catalogs: Record<CompletionBackend, Completion[]> = {
-  latex: latexCompletions,
-  typst: typstCompletions,
-};
+const catalogs: Record<CompletionBackend, Completion[]> = { latex: latexCompletions, typst: typstCompletions };
+
+function subsequenceIndices(name: string, query: string): number[] | null {
+  const indices: number[] = [];
+  let searchFrom = 0;
+  for (const character of query) {
+    const index = name.indexOf(character, searchFrom);
+    if (index < 0) return null;
+    indices.push(index);
+    searchFrom = index + 1;
+  }
+  return indices;
+}
 
 /** Finds catalog entries for the identifier immediately before the caret. */
 export function findCompletions(
@@ -101,36 +209,49 @@ export function findCompletions(
     if (beforeCaret[start - 1] === '\\') return [];
   }
 
-  const matches = catalogs[backend]
-    .filter((completion) => completion.name.startsWith(query))
-    .sort((a, b) => Number(a.name !== query) - Number(b.name !== query) || a.name.localeCompare(b.name))
-    .slice(0, 8)
-    .map((completion) => ({ completion, query, range: { start, end: caret } }));
+  const ranked = catalogs[backend].flatMap((completion, catalogIndex) => {
+    const name = completion.name;
+    const matchedIndices = subsequenceIndices(name, query);
+    if (!matchedIndices) return [];
+    const matchKind: CompletionMatch['matchKind'] = name === query ? 'exact' : name.startsWith(query) ? 'prefix' : 'fuzzy';
+    const gaps = matchedIndices[matchedIndices.length - 1] - matchedIndices[0] + 1 - matchedIndices.length;
+    return [{ completion, query, range: { start, end: caret }, matchedIndices, matchKind, gaps, catalogIndex }];
+  });
 
-  return matches;
+  ranked.sort((a, b) => {
+    const kindOrder = { exact: 0, prefix: 1, fuzzy: 2 };
+    const byKind = kindOrder[a.matchKind] - kindOrder[b.matchKind];
+    if (byKind) return byKind;
+    if (a.matchKind !== 'fuzzy') return a.catalogIndex - b.catalogIndex;
+    return a.gaps - b.gaps || a.completion.name.length - b.completion.name.length || a.catalogIndex - b.catalogIndex;
+  });
+  return ranked.slice(0, 30).map(({ completion, query: matchedQuery, range, matchedIndices, matchKind }) => ({
+    completion, query: matchedQuery, range, matchedIndices, matchKind,
+  }));
 }
 
-/** Replaces the matched query with literal/snippet parts and computes source ranges. */
+/** Replaces the matched query with literal/snippet parts and computes zero-width source ranges. */
 export function applyCompletion(value: string, match: CompletionMatch): AppliedCompletion {
   const { start, end } = match.range;
   let inserted = '';
-  const allPlaceholders: TextRange[] = [];
+  const slots: TextRange[] = [];
   for (const part of match.completion.parts) {
     if (typeof part === 'string') {
       inserted += part;
     } else {
-      const placeholderStart = start + inserted.length;
-      inserted += part.placeholder;
-      allPlaceholders.push({ start: placeholderStart, end: placeholderStart + part.placeholder.length });
+      const position = start + inserted.length;
+      slots.push({ start: position, end: position });
     }
   }
 
-  const updated = value.slice(0, start) + inserted + value.slice(end);
+  const suffix = value.slice(end);
+  if (suffix.startsWith(' ') && inserted.endsWith(' ')) inserted = inserted.slice(0, -1);
+  const updated = value.slice(0, start) + inserted + suffix;
   return {
     value: updated,
-    selection: allPlaceholders[0] ?? null,
-    placeholders: allPlaceholders.slice(1),
-    finalCaret: allPlaceholders.length > 0
+    selection: slots[0] ?? null,
+    placeholders: slots.slice(1),
+    finalCaret: slots.length > 0
       ? { start: start + inserted.length, end: start + inserted.length }
       : null,
   };
